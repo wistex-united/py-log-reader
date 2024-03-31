@@ -1,0 +1,8 @@
+__pycache__/
+*.yuy2
+*.png
+*.jpg
+*.jpeg
+*.log
+!rb6.log
+/chkxw_utils
