@@ -1,8 +1,15 @@
 __pycache__/
+LogInterface/LogClasses/
+!LogInterface/LogClasses/__init__.py
+*_frames/
+*_images/
 *.yuy2
 *.png
 *.jpg
 *.jpeg
 *.log
+*.prof
+*.pkl
+*.pickle
 !rb6.log
 /chkxw_utils

@@ -1,5 +1,9 @@
 {
-    "cSpell.words": [
-        "rawbtyes"
-    ]
-}
+    "[python]": {
+     "editor.codeActionsOnSave": {
+       "source.organizeImports": "always"
+        }
+      },
+    "python.formatting.provider": "black",
+    "isort.args": ["--profile", "black"],
+ }
