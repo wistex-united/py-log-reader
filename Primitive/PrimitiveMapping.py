@@ -1,5 +1,6 @@
-from .Angle import Angle
 import numpy as np
+
+from .Angle import Angle
 from .PrimitiveDefinitions import *
 
 NumpySelfMapping = {

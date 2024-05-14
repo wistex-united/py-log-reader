@@ -1,25 +1,22 @@
-from enum import Enum
-import copy
 import io
-from mmap import mmap
 import os
+from enum import Enum
+from mmap import mmap
 from pathlib import Path
-import pickle
-from typing import Any, Dict, List, Type, TypeAlias, Union
+from typing import List, Type, Union
 
-import tqdm
-
-
-from LogInterface import DataClass, Frame, Message
-from .LogInterfaceBase import LogInterfaceBase
-from Utils import MemoryMappedFile
 from StreamUtils import StreamUtil
+from Utils import MemoryMappedFile
 
-from .Chunk import ChunkEnum, Chunk
-from .UncompressedChunk import UncompressedChunk as UChunk
+from .Chunk import Chunk, ChunkEnum
+from .DataClasses import DataClass
+from .Frame import Frame
+from .LogInterfaceBase import LogInterfaceBase
+from .Message import Message
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
+from .UncompressedChunk import UncompressedChunk as UChunk
 
 # TODO: separate top/root level specific functions into a separate class
 
@@ -91,7 +88,7 @@ class Log(LogInterfaceBase):
 
     def __getstate__(self):
         state = super().__getstate__()
-        if state.get("file",None):
+        if state.get("file", None):
             del state["file"]
         return state
 

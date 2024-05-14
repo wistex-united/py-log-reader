@@ -1,15 +1,16 @@
 import ast
-from enum import Enum
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
-from LogInterface import Stopwatch, Timer
 from StreamUtils import StreamUtil
+from Utils import dumpObj
+
+from .Chunk import Chunk
+from .DataClasses import Timer
 from .LogInterfaceBase import LogInterfaceBase
 from .Message import Message
-from .Chunk import Chunk
-from Utils import dumpObj
 
 
 class Frame(LogInterfaceBase):

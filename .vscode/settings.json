@@ -1,9 +1,10 @@
 {
-    "[python]": {
-     "editor.codeActionsOnSave": {
-       "source.organizeImports": "always"
-        }
-      },
-    "python.formatting.provider": "black",
-    "isort.args": ["--profile", "black"],
- }
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "always"
+    },
+  },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  }
+}

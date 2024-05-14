@@ -1,6 +1,8 @@
-from typing import Union, Type, Literal
-from .Angle import Angle
+from typing import Literal, Type, Union
+
 import numpy as np
+
+from .Angle import Angle
 
 # To map the Log's c++ type to python type, we create a series of primitive types here
 # Currently I map them to numpy types

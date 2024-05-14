@@ -1,11 +1,12 @@
 import cv2
+from PIL.Image import Image, fromarray
 
-from .Image import Image as ImageBase
-from .PixelTypes import YUYVPixel, YUVPixel
+from LogInterface import DataClass
 from Primitive import *
 from StreamUtils import StreamUtil
-from LogInterface import DataClass
-from PIL.Image import Image, fromarray
+
+from .Image import Image as ImageBase
+from .PixelTypes import YUVPixel, YUYVPixel
 
 
 class CameraImage(ImageBase, DataClass):

@@ -1,12 +1,12 @@
-from enum import Enum
 import importlib
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Type
 
+from StreamUtils import *
 from Utils import sanitizeCName
 
 from .Chunk import Chunk, ChunkEnum
-from StreamUtils import *
 
 
 class MessageIDChunk(Chunk):

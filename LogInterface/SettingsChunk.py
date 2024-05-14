@@ -1,7 +1,9 @@
 from typing import List
-from .Chunk import Chunk, ChunkEnum
+
 from Primitive import *
 from StreamUtils import *
+
+from .Chunk import Chunk, ChunkEnum
 
 
 class SettingsChunk(Chunk):

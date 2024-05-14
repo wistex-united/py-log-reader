@@ -1,9 +1,9 @@
-from Primitive import *
-from StreamUtils import *
-
-from LogInterface import Log
 import cProfile
 import pstats
+
+from LogInterface import Log
+from Primitive import *
+from StreamUtils import *
 
 
 def main():

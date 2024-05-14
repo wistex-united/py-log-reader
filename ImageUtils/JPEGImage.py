@@ -1,12 +1,14 @@
 from io import BytesIO
-from PIL.Image import open, fromarray
-import numpy as np
-import cv2
 
-from .Image import Image as ImageBase
+import cv2
+import numpy as np
+from PIL.Image import fromarray, open
+
+from LogInterface import DataClass
 from Primitive import *
 from StreamUtils import StreamUtil
-from LogInterface import DataClass
+
+from .Image import Image as ImageBase
 
 
 class JPEGImage(ImageBase, DataClass):

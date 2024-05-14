@@ -1,1 +1,1 @@
-from .StreamUtil import StreamUtil, StreamAble, ReadInstruction
+from .StreamUtil import ReadInstruction, StreamAble, StreamUtil

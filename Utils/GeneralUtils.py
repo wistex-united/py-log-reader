@@ -1,10 +1,12 @@
+import json
 import re
 from typing import List, Tuple, Union
-import json
-from numpy.typing import NDArray, DTypeLike
+
+from numpy.typing import NDArray
 
 from Primitive import *
-from Utils.JSONEncoder import SpecialEncoder
+
+from .JSONEncoder import SpecialEncoder
 
 
 def findClosestValidValue(list: Union[List, NDArray], index, null_value=-1):

@@ -1,5 +1,5 @@
 __pycache__/
-LogInterface/LogClasses/
+LogInterface/LogClasses/*
 !LogInterface/LogClasses/__init__.py
 *_frames/
 *_images/

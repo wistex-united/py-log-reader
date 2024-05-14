@@ -6,7 +6,6 @@ import tqdm
 
 from Primitive import *
 
-
 StreamAble = Union[mmap, io.BytesIO, bytes]
 """Type acceptable to init a StreamUtil"""
 ReadInstruction = Tuple[Union[PrimitiveTypeHint, List[Tuple]], int]

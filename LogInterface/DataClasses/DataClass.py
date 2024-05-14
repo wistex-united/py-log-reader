@@ -1,8 +1,8 @@
-from abc import ABC, ABCMeta, abstractmethod
-from enum import EnumMeta
 import json
-import re
-from typing import Any, Dict, List, Tuple
+from abc import ABCMeta, abstractmethod
+from enum import EnumMeta
+from typing import Any, Dict, List
+
 import numpy as np
 
 from StreamUtils import ReadInstruction, StreamUtil

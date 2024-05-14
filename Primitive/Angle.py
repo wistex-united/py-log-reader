@@ -1,5 +1,6 @@
 import math
 
+
 class Angle:
     """
     This class is modified from BadgerRLSystem's C++ class

@@ -1,6 +1,7 @@
-from .Chunk import Chunk, ChunkEnum
-from StreamUtils import *
 from Primitive import *
+from StreamUtils import *
+
+from .Chunk import Chunk, ChunkEnum
 
 
 class SettingsChunk(Chunk):

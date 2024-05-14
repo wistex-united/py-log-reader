@@ -1,11 +1,10 @@
-from abc import ABC, abstractmethod
-import copy
 import json
-from mmap import mmap
 import os
-from pathlib import Path
 import pickle
-from typing import Any, Dict, List
+from abc import ABC, abstractmethod
+from mmap import mmap
+from pathlib import Path
+from typing import Any, List
 
 from StreamUtils import StreamUtil
 from Utils import SpecialEncoder
@@ -24,7 +23,7 @@ class LogInterfaceBase(ABC):
         self._children: List
 
         # cached references
-        self._log_cached: "Log"  # type: ignore TODO: add a forward reference to Log
+        self._log_cached: Any  # type: ignore TODO: add a forward reference to Log
         self._index_cached: int
 
     @property

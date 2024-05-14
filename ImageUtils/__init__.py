@@ -1,4 +1,4 @@
 from .CameraImage import CameraImage
-from .JPEGImage import JPEGImage
 from .Image import Image
+from .JPEGImage import JPEGImage
 from .PixelTypes import *

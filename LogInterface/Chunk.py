@@ -2,6 +2,7 @@ from abc import abstractmethod
 from enum import Enum, auto
 from pathlib import Path
 from typing import List
+
 from .LogInterfaceBase import LogInterfaceBase
 
 

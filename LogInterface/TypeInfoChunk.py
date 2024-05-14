@@ -1,15 +1,16 @@
+import importlib
+import re
 from enum import Enum
 from pathlib import Path
-import re
 from typing import Dict, List, Tuple, Type
 
-from .Chunk import Chunk, ChunkEnum
 from ImageUtils import CameraImage, JPEGImage
-from StreamUtils import *
 from Primitive import *
-from .DataClasses import Annotation, DataClass, Stopwatch, FrameBegin, FrameFinished
-from Utils import sanitizeCName, parseCtype2Pytype, type2ReadInstruction
-import importlib
+from StreamUtils import *
+from Utils import parseCtype2Pytype, sanitizeCName, type2ReadInstruction
+
+from .Chunk import Chunk, ChunkEnum
+from .DataClasses import Annotation, DataClass, FrameBegin, FrameFinished, Stopwatch
 
 
 class TypeInfoChunk(Chunk):

@@ -1,18 +1,20 @@
 import asyncio
-import aiofiles
 import io
-from mmap import ACCESS_READ, mmap
 import os
-from pathlib import Path
 import pickle
+from mmap import ACCESS_READ, mmap
+from pathlib import Path
 from typing import Any, Callable, Dict, Tuple
-from PIL import PngImagePlugin
-from ImageUtils import CameraImage, JPEGImage
 
+import aiofiles
+from PIL import PngImagePlugin
+
+from ImageUtils import CameraImage, JPEGImage
 from Primitive import *
 from StreamUtils import StreamUtil
 from Utils import dumpObj
-from .DataClasses import DataClass, Annotation, Stopwatch
+
+from .DataClasses import Annotation, DataClass, Stopwatch
 from .LogInterfaceBase import LogInterfaceBase
 
 

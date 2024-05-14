@@ -1,11 +1,10 @@
-# from _ctypes import PyObj_FromPtr  # type: ignore
-from abc import ABCMeta
-from collections import deque
-from enum import EnumMeta
 import json
 import re
+from abc import ABCMeta
+from enum import EnumMeta
 
 import numpy as np
+
 
 class NoIndent(object):
     """Value wrapper."""

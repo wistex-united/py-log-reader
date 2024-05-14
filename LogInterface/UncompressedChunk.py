@@ -1,22 +1,18 @@
-from asyncio import as_completed
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from multiprocessing.managers import SharedMemoryManager
-import os
-from pathlib import Path
-from re import M, T
-from typing import Dict, List, Set
-
-from multiprocessing import Pool, Process, cpu_count, shared_memory
+from multiprocessing import Pool, cpu_count
+from typing import Dict, List
 
 from tqdm import tqdm
 
-from .DataClasses import DataClass
-from LogInterface import Message, Stopwatch, Timer
-from .Chunk import Chunk, ChunkEnum
 from StreamUtils import *
+
+from .Chunk import Chunk, ChunkEnum
+from .DataClasses import DataClass, Stopwatch, Timer
 from .Frame import Frame
+from .Message import Message
 
 
 class UncompressedChunk(Chunk):

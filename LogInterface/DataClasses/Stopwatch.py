@@ -1,15 +1,16 @@
 from copy import copy
 from multiprocessing import shared_memory
 from multiprocessing.managers import DictProxy
-from numpy.typing import NDArray
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
+
 import numpy as np
+from numpy.typing import NDArray
+
 from Primitive import *
 from StreamUtils import StreamUtil
 from Utils import findClosestValidValue
-from .DataClass import DataClass
 
-from collections import deque
+from .DataClass import DataClass
 
 EMPTY_INDICATOR = UInt(-1)
 

@@ -1,5 +1,6 @@
 from Primitive import *
-from StreamUtils import StreamUtil, StreamAble
+from StreamUtils import StreamAble, StreamUtil
+
 from .DataClass import DataClass
 
 
