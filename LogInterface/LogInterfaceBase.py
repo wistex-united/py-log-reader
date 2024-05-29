@@ -77,10 +77,10 @@ class LogInterfaceBase(ABC):
 
     def __setstate__(self, state) -> None:
         self.__dict__.update(state)
-        if hasattr(self, "_children"):
-            for idx in range(len(self._children)):
-                if hasattr(self._children[idx], "_parent"):
-                    self._children[idx]._parent = self
+        # if hasattr(self, "_children"):
+        #     for idx in range(len(self._children)):
+        #         if hasattr(self._children[idx], "_parent"):
+        #             self._children[idx]._parent = self
 
     @property
     def startByte(self) -> int:

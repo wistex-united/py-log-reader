@@ -4,7 +4,7 @@ import os
 import pickle
 from mmap import ACCESS_READ, mmap
 from pathlib import Path
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import aiofiles
 from PIL import PngImagePlugin
@@ -41,27 +41,37 @@ class Message(LogInterfaceBase):
         else:
             raise KeyError("Invalid key type")
 
-    def __getstate__(self):
-        state = super().__getstate__()
-        if state.get("_reprObject", None):
-            del state["_reprObject"]
-        return state
+    # def __getstate__(self):
+    #     state = super().__getstate__()
+    #     if state.get("_reprObject", None):
+    #         del state["_reprObject"]
+    #     return state
 
     def dumpRepr(self):
         os.makedirs(self.picklePath.parent, exist_ok=True)
         pickle.dump(self._reprObject, open(self.reprPicklePath, "wb"))
 
     @staticmethod
-    async def asyncDumpReprWrapper(picklePath: Path, reprObject: DataClass):
-        loop = asyncio.get_running_loop()
-        async with aiofiles.open(picklePath, "wb") as f:
-            await loop.run_in_executor(None, pickle.dump, reprObject, f)
+    def dumpReprWrapper(picklePath: Path, reprObject: DataClass):
+        with open(picklePath, "wb") as f:
+            pickle.dump(reprObject, f)
 
     def loadRepr(self) -> bool:
         if self.hasCachedRepr():
-            self._reprObject = pickle.load(open(self.reprPicklePath, "rb"))
+            try:
+                self._reprObject = pickle.load(open(self.reprPicklePath, "rb"))
+            except EOFError:
+                return False
             return True
         return False
+
+    @staticmethod
+    def loadReprWrapper(picklePath: Path) -> Optional[DataClass]:
+        try:
+            reprObject = pickle.load(open(picklePath, "rb"))
+            return reprObject
+        except EOFError:
+            return None
 
     def hasCachedRepr(self) -> bool:
         if os.path.isfile(self.reprPicklePath):  # type: ignore
@@ -131,8 +141,12 @@ class Message(LogInterfaceBase):
         """The representation object"""
         if not hasattr(self, "_reprObject"):
             if self.hasCachedRepr():
-                self.loadRepr()
-                return self._reprObject
+                if self.loadRepr():
+                    return self._reprObject
+                else:
+                    raise ValueError(
+                        "Message has cached representation object, but failed to load it"
+                    )
             else:
                 raise ValueError(
                     "Message has no representation object, please parse the message first"
@@ -147,6 +161,11 @@ class Message(LogInterfaceBase):
         if isinstance(value, Annotation):
             value.frame = self.frame.threadName
         self._reprObject = value
+
+    @property
+    def isParsed(self) -> bool:
+        """Whether the message has been parsed into a representation object"""
+        return hasattr(self, "_reprObject") and self._reprObject is not None
 
     @property
     def reprDict(self) -> Dict[str, Any]:
@@ -296,42 +315,20 @@ class Message(LogInterfaceBase):
             else:
                 raise ValueError("Message is not an image")
 
-    def saveImageWithMetaData(self, dir=None, imgName=None, slientFail=False):
-        """Try to find some meta-data in the frame of this image and write it along with the image into a PNG file"""
+    def saveImage(
+        self,
+        dir: Path,
+        imgName: str,
+        metadata=PngImagePlugin.PngInfo | None,
+        slientFail: bool = False,
+    ):
         if self.isImage:
-            metadata = None
-            try:
-                # Try to get metadata in the parent frame
-                CameraInfo = self.frame["CameraInfo"]
-                CameraMatrix = self.frame["CameraMatrix"]
-                ImageCoordinateSystem = self.frame["ImageCoordinateSystem"]
-
-                metadata = PngImagePlugin.PngInfo()
-                # Add metadata (using the tEXt chunk)
-                # TODO: here I directly write the json string, maybe there is a more compressed way
-                metadata.add_text("CameraInfo", str(CameraInfo))
-                metadata.add_text("CameraMatrix", str(CameraMatrix))
-                metadata.add_text("ImageCoordinateSystem", str(ImageCoordinateSystem))
-            except KeyError:
-                pass
-
-            if imgName is None:
-                # LogFileName_RobotNumber_Timestamp_ThreadName_FrameIndexInThread_MessageIndex_StartByte_EndByte.png
-                imgName = (
-                    Path(self.logFilePath).stem
-                    + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.frame.timestamp}_{self.frame.threadName}_{self.frame.threadIndex}_M{self.absMessageIndex}_Bf{self.startByte}_Bt{self.endByte}.png"
-                )
-            if dir is None:
-                dir = os.path.join(
-                    Path(self.logFilePath).parent,
-                    f"{Path(self.logFilePath).stem}_images",
-                )
             os.makedirs(dir, exist_ok=True)
 
             if isinstance(self.reprObj, CameraImage):
                 self.reprObj.saveImage(os.path.join(dir, imgName), metadata)
             elif isinstance(self.reprObj, JPEGImage):
-                self.reprObj.saveImage(os.path.join(dir, imgName))
+                self.reprObj.saveImage(os.path.join(dir, imgName), metadata)
             else:
                 raise Exception("Not valid image type")
         else:

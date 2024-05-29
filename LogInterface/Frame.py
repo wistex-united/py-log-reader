@@ -4,6 +4,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
+from PIL import PngImagePlugin
+
 from StreamUtils import StreamUtil
 from Utils import dumpObj
 
@@ -66,7 +68,6 @@ class Frame(LogInterfaceBase):
             byteIndex = (
                 sutil.tell()
             )  # No matter this message is valid or not, update the byteIndex
-
             if message.logId == 255:  # 255 means it is a message without message id
                 self.dummyMessages.append(message)
                 raise Exception(
@@ -187,21 +188,37 @@ class Frame(LogInterfaceBase):
         """
         if hasattr(self, "_timestamp_cached"):
             return self._timestamp_cached
-        if self.threadName in self._threadWithTimestamp:
+        if "FrameInfo" in self.classNames and "time" in self["FrameInfo"].reprDict:
             self._timestamp_cached = self["FrameInfo"]["time"]
         else:
             # Fake a reasonable timestamp
             sign = -1
             distance = 0
-            while True:
-                cand = self.parent.children[self.index + sign * distance]
-                if cand.threadName in self._threadWithTimestamp:
-                    self._timestamp_cached = cand.timestamp + sign * distance
-                    break
+            found = False
+            rangeOfIndex = range(len(self.parent.children))
+            while (
+                self.index + distance in rangeOfIndex
+                or self.index - distance in rangeOfIndex
+            ):
+                if self.index + sign * distance in rangeOfIndex:
+                    cand = self.parent.children[self.index + sign * distance]
+                    if (
+                        "FrameInfo" in cand.classNames
+                        and "time" in cand["FrameInfo"].reprDict
+                    ):
+                        for i in range(distance):
+                            self.parent.children[
+                                self.index + sign * i
+                            ]._timestamp_cached = cand.timestamp - sign * (distance - i)
+                        found = True
+                        break
                 if sign == 1:
                     distance += 1
                 else:
                     sign = -sign
+            if not found:
+                for i in rangeOfIndex:
+                    self.parent.children[i]._timestamp_cached = i
         return self._timestamp_cached
 
     @property
@@ -312,10 +329,35 @@ class Frame(LogInterfaceBase):
 
     def saveImageWithMetaData(self, dir=None, imgName=None, slientFail=False):
         """Try to find some meta-data in this frame and write it along with the image in this frame into a PNG file"""
+        if self.hasImage is False:
+            if slientFail:
+                return
+            else:
+                raise ValueError("This frame does not have an image")
+
+        if imgName is None:
+            imgName = self.imageName
+        if dir is None:
+            dir = self.imageDir
+
+        metadata = None
+        try:
+            # Try to get metadata in the parent frame
+            CameraInfo = self["CameraInfo"]
+            CameraMatrix = self["CameraMatrix"]
+            ImageCoordinateSystem = self["ImageCoordinateSystem"]
+
+            metadata = PngImagePlugin.PngInfo()
+            # Add metadata (using the tEXt chunk)
+            # TODO: here I directly write the json string, maybe there is a more compressed way
+            metadata.add_text("CameraInfo", str(CameraInfo))
+            metadata.add_text("CameraMatrix", str(CameraMatrix))
+            metadata.add_text("ImageCoordinateSystem", str(ImageCoordinateSystem))
+        except KeyError:
+            pass
+
         if self.imageMessage is not None:
-            self.imageMessage.saveImageWithMetaData(dir, imgName, slientFail=slientFail)
-        else:
-            raise Exception("Code should not reach here")
+            self.imageMessage.saveImage(dir, imgName, metadata, slientFail=slientFail)
 
     def recoverTrajectory(self):
         if self.threadName == "Cognition":
@@ -343,18 +385,45 @@ class Frame(LogInterfaceBase):
                 return None
         return None
 
-    def saveFrameDict(self, dir=None):
-        """Save the frame as a json file"""
-        # LogFileName_RobotNumber_Timestamp_ThreadName_FrameIndexInThread_StartByte_EndByte.json
-        fileName = (
+    @property
+    def outputDir(self):
+        return Path(self.logFilePath).parent / Path(self.logFilePath).stem
+
+    @property
+    def imageDir(self):
+        if self.hasImage:
+            return self.outputDir / f"{Path(self.logFilePath).stem}_images"
+        else:
+            raise ValueError("This frame does not have an image")
+
+    @property
+    def frameDir(self):
+        return self.outputDir / f"{Path(self.logFilePath).stem}_frames"
+
+    @property
+    def imageName(self):
+        if self.hasImage and self.imageMessage is not None:
+            return (
+                Path(self.logFilePath).stem
+                + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_M{self.imageMessage.absMessageIndex}_Bf{self.startByte}_Bt{self.endByte}.png"
+            )
+        else:
+            raise ValueError("This frame does not have an image")
+
+    @property
+    def jsonName(self):
+        """LogFileName_RobotNumber_Timestamp_ThreadName_FrameIndexInThread_StartByte_EndByte.json"""
+        return (
             Path(self.logFilePath).stem
             + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_Bf{self.startByte}_Bt{self.endByte}.json"
         )
+
+    def saveFrameDict(self, dir=None):
+        """Save the frame as a json file"""
+
+        fileName = self.jsonName
         if dir is None:
-            dir = os.path.join(
-                Path(self.logFilePath).parent,
-                f"{Path(self.logFilePath).stem}_frames",
-            )
+            dir = self.frameDir
         os.makedirs(dir, exist_ok=True)
         with open(os.path.join(dir, fileName), "w") as f:
             f.write(str(self))

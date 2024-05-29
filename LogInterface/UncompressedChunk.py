@@ -81,9 +81,29 @@ class UncompressedChunk(Chunk):
         self._startByte = offset
         self._endByte = sutil.tell() - startPos + offset
 
-    def parseBytes(self, showProgress: bool = True, cacheRepr: bool = True):
+    def parseBytes(self, showProgress: bool = True, cacheRepr: bool = False):
         Wrapper = partial(Message.parseBytesWrapper, logFilePath=self.logFilePath)
-        unparsed = [message for message in self.messages if not message.hasCachedRepr()]
+        cached = []
+        parsed = []
+        unparsed = []
+
+        # currently parsing everything is faster TODO: check what cause this strage phenomena
+
+        for message in tqdm(
+            self.messages, desc="Checking Message Parsed", disable=not showProgress
+        ):
+            if message.isParsed:
+                parsed.append(message)
+                continue
+            elif message.hasCachedRepr():
+                cached.append(message)
+            else:
+                unparsed.append(message)
+        # failed = asyncio.get_event_loop().run_until_complete(self.loadReprs(cached))
+        # unparsed.extend(failed)
+        # for message in failed:
+        #     print(f"Failed to parse message {message.index}")
+
         # unparsed = self.messages
         if len(unparsed) == 0:
             print("All messages are parsed")
@@ -117,29 +137,31 @@ class UncompressedChunk(Chunk):
                 frameTmp: Frame = unparsed[idx].frame
                 frameTmp.timer.parseStopwatch(result, frameTmp.index)
         if cacheRepr:
-            asyncio.get_event_loop().run_until_complete(self.dumpReprs(results, unparsed))
-
-    async def dumpReprs(self, results, unparsed):
-        loop = asyncio.get_event_loop()
-
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            futures = list(
-                tqdm(
-                    (
-                        loop.run_in_executor(
-                            executor,
-                            Message.asyncDumpReprWrapper,
-                            unparsed[idx].reprPicklePath,
-                            results[idx],
-                        )
-                        for idx in range(len(results))
-                    ),
-                    total=len(results),
-                    desc="Queuing All Representations",
-                )
+            asyncio.get_event_loop().run_until_complete(
+                self.dumpReprs(results, unparsed)
             )
 
+    async def dumpReprs(self, results: List[DataClass], unparsed: List[Message]):
+        loop = asyncio.get_running_loop()
+
+        # Create a ThreadPoolExecutor
+        with ThreadPoolExecutor() as executor:
+            # Schedule the synchronous tasks in the executor
+            futures = [
+                loop.run_in_executor(
+                    executor,
+                    Message.dumpReprWrapper,
+                    unparsed[idx].reprPicklePath,
+                    results[idx],
+                )
+                for idx in tqdm(
+                    range(len(results)),
+                    total=len(results),
+                    desc="Queuing All Repr to Dump",
+                )
+            ]
+
+            # Show progress bar for queuing
             for future in tqdm(
                 asyncio.as_completed(futures),
                 total=len(futures),

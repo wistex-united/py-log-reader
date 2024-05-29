@@ -110,8 +110,6 @@ class Log(LogInterfaceBase):
         """
         if os.path.isfile(self.picklePath):
             try:
-                # LogWithIndexes: "Log" = pickle.load(open(self.picklePath, "rb"))
-                # self.__dict__.update(LogWithIndexes.__dict__)
                 self.pickleLoad()
                 return
             except EOFError:  # Something wrong with the indexes file, remove it
@@ -161,14 +159,15 @@ class Log(LogInterfaceBase):
         self._endByte = sutil.tell() - startPos + offset
         self.pickleDump()
 
-    # def dump(self):
-    #     if os.path.isfile(self.picklePath):
-    #         os.remove(self.picklePath)
-
-    #     self.file = None  # type: ignore Since mmap cannot be pickled, we need to close the file before pickling
-    #     os.makedirs(self.cacheDir, exist_ok=True)
-    #     pickle.dump(self, open(self.picklePath, "wb"))
-    #     self.readLogFile()  # Reopen the file
+    def parseBytes(self):
+        if os.path.isfile(self.picklePath):
+            try:
+                self.pickleLoad()
+            except EOFError:  # Something wrong with the indexes file, remove it
+                os.remove(self.picklePath)
+        for i in self.children:
+            i.parseBytes()
+        self.pickleDump()
 
     @property
     def picklePath(self) -> Path:
@@ -203,31 +202,6 @@ class Log(LogInterfaceBase):
     @property
     def reprs(self) -> List[DataClass]:
         return self.UncompressedChunk.reprs
-
-    # I think this is not a good idea
-    # def __getattribute__(self, attrName: str) -> Any:
-    #     """Recursively fetch attributes from its children"""
-    #     try:
-    #         return super().__getattribute__(attrName)
-    #     except AttributeError:
-    #         result = []
-    #         childHasAttr = 0
-    #         for children in self.children:
-    #             if (
-    #                 hasattr(children, "providedAttributes")
-    #                 and attrName in children.providedAttributes
-    #             ):
-    #                 childHasAttr += 1
-    #                 try:
-    #                     result.append(children.__getattribute__(attrName))
-    #                 except AttributeError:
-    #                     pass
-    #         if childHasAttr != 0:
-    #             if childHasAttr == 1:
-    #                 return result[0]
-    #             return result
-    #         elif childHasAttr == 0:
-    #             raise AttributeError(f"Attribute {attrName} not found")
 
     @property
     def children(self) -> List[Chunk]:
