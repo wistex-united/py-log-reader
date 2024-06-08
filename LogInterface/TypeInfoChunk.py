@@ -10,7 +10,8 @@ from StreamUtils import *
 from Utils import parseCtype2Pytype, sanitizeCName, type2ReadInstruction
 
 from .Chunk import Chunk, ChunkEnum
-from .DataClasses import Annotation, DataClass, FrameBegin, FrameFinished, Stopwatch
+from .DataClasses import (Annotation, DataClass, FrameBegin, FrameFinished,
+                          Stopwatch)
 
 
 class TypeInfoChunk(Chunk):

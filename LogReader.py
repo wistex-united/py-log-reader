@@ -1,10 +1,12 @@
-import ast
 import cProfile
 import csv
-from pathlib import Path
 import pstats
-from tkinter import NONE
+from pathlib import Path
+from typing import List
+
+import imitation
 import tqdm
+from imitation.data import serialize
 from imitation.data.types import Transitions
 
 from LogInterface import Log
@@ -30,7 +32,7 @@ def main():
     collisions = []
     prev_state = None
     prev_obs = None
-    transitions = []
+    transitions: List[List] = []
     with open(f"{Path(LOG.logFilePath).stem}/data.csv", "w") as f:
         writer = csv.writer(f)
         writer.writerow(
@@ -144,7 +146,7 @@ def main():
                     )
 
                     if prev_obs is not None:
-                        transitions.append((prev_obs, acts, None, obs, False))
+                        transitions.append([prev_obs, acts, None, obs, False])
                     prev_obs = obs
                     OBS.stepObservationHistory(agentLoc, ball_loc, playerNumber)
                     # obs, acts, infos, next_obs, dones
@@ -156,21 +158,16 @@ def main():
                         writer.writerow(
                             [
                                 frame.index,
-                                *(["-"]*8),
+                                *(["-"] * 8),
                                 frame["GameControllerData"]["rollOutResult"],
                                 frame.jsonName,
                             ]
                         )
                         transitions.pop()  # Remove the last transition that might be wrong
                         # Set the done flag for the last state
-                        transitions[-1] = tuple(list(transitions[-1])[:-1] + [True])
+                        last = transitions[-1]
+                        last[4] = True
 
-                    # print(state)
-                    # print(frame.jsonName)
-                    # if state != prev_state:
-                    #     print(state)
-                    #     print(frame.jsonName)
-                    # pass
                 # elif state == GAME_STATE["ownKickOff"]:
                 #     pass
                 # elif state == GAME_STATE["setupOpponentKickOff"]:
@@ -191,23 +188,27 @@ def main():
             #     print(1)
         # print(collisions)
 
+    obs, acts, infos, next_obs, dones = map(np.array, zip(*transitions))
+    np.savez(f"{Path(LOG.logFilePath).stem}/transitions.npz", obs=obs, acts=acts, infos=infos, next_obs=next_obs, dones=dones)
 
-profiler = cProfile.Profile()
-# Start profiling
-profiler.enable()
+    # imitationLearningTransitions=Transitions(obs, acts, infos, next_obs, dones)
 
-# Code you want to profile
+# profiler = cProfile.Profile()
+# # Start profiling
+# profiler.enable()
+
+# # Code you want to profile
 main()
 
-# Stop profiling
-profiler.disable()
-# Create a Stats object
-stats = pstats.Stats(profiler).sort_stats("cumulative")
-# Print the stats
-# stats.print_stats()
+# # Stop profiling
+# profiler.disable()
+# # Create a Stats object
+# stats = pstats.Stats(profiler).sort_stats("cumulative")
+# # Print the stats
+# # stats.print_stats()
 
-# Optionally, you can save the stats to a file
-stats.dump_stats("profile_stats.prof")
+# # Optionally, you can save the stats to a file
+# stats.dump_stats("profile_stats.prof")
 # Load the stats
 # loaded_stats = pstats.Stats("profile_stats.prof")
 
