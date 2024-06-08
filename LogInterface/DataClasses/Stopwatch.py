@@ -96,6 +96,19 @@ class Timer:
         # cache
         self._interpolatedInfos_cached: NDArray[UInt]
 
+    def __del__(self):
+        # Ensure the shared memory is unlinked and closed
+        if hasattr(self, 'sharedMemory'):
+            try:
+                self.sharedMemory.close()
+            except Exception as e:
+                print(f"Error closing shared memory: {e}")
+
+            try:
+                self.sharedMemory.unlink() # Just in case the file is not unlinked
+            except Exception as e:
+                pass
+
     @property
     def shape(self):
         if hasattr(self, "storage"):

@@ -1,6 +1,9 @@
 import ast
 import cProfile
+import csv
+from pathlib import Path
 import pstats
+from tkinter import NONE
 import tqdm
 from imitation.data.types import Transitions
 
@@ -12,7 +15,8 @@ from Utils.Observation import Observation
 
 def main():
     LOG = Log()
-    LOG.readLogFile("bc15_adam.log")
+    # LOG.readLogFile("bc18_adam.log")
+    LOG.readLogFile("traj10_bh.log")
     LOG.eval()
     LOG.parseBytes()
     # for frame in tqdm.tqdm(LOG.frames):
@@ -27,86 +31,165 @@ def main():
     prev_state = None
     prev_obs = None
     transitions = []
-    for frame in LOG.UncompressedChunk.threads["Cognition"]:
-        # if frame.hasImage:
-        #     frame.saveImageWithMetaData()
-        #     print(f"Frame {frame.index} has image")
-        # frame.recoverTrajectory()
-        GAME_STATE = LOG.TypeInfoChunk.enumClasses["GameState::State"]
-        try:
-            gameState = frame["GameState"]
-            playerNumber = gameState["playerNumber"]
+    with open(f"{Path(LOG.logFilePath).stem}/data.csv", "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "frameIndex",
+                "agentLoc",
+                "ballLoc",
+                *[
+                    "robotSpeedX",
+                    "robotSpeedY",
+                    "robotSpeedRot",
+                    "kickType",
+                    "kickLength",
+                    "alignPreciselyModified",
+                    "rollOutResult",
+                ],
+                "jsonFile",
+            ]
+        )
+        for frame in LOG.UncompressedChunk.threads["Cognition"]:
+            # if frame.hasImage:
+            #     frame.saveImageWithMetaData()
+            #     print(f"Frame {frame.index} has image")
+            # frame.recoverTrajectory()
+            GAME_STATE = LOG.TypeInfoChunk.enumClasses["GameState::State"]
+            try:
+                gameState = frame["GameState"]
+                playerNumber = gameState["playerNumber"]
 
-            state = gameState["state"]
+                state = gameState["state"]
 
-            if state == GAME_STATE["playing"]:
-                # The observations we use
-                agentLoc = [
-                    frame["RobotPose"]["translation"].x,
-                    frame["RobotPose"]["translation"].y,
-                    frame["RobotPose"]["rotation"].value,
-                ]
-                ball_loc = [
-                    frame["FieldBall"]["positionOnField"].x,
-                    frame["FieldBall"]["positionOnField"].y,
-                ]
-                teammate_loc = []
-                for teammate in frame["GlobalTeammatesModel"]["teammates"]:
-                    teammate_loc.append(
-                        [teammate.pose.translation.x, teammate.pose.translation.y]
+                if state == GAME_STATE["playing"]:
+                    # The observations we use
+                    agentLoc = [
+                        frame["RobotPose"]["translation"].x,
+                        frame["RobotPose"]["translation"].y,
+                        frame["RobotPose"]["rotation"].value,
+                    ]
+                    ball_loc = [
+                        frame["FieldBall"]["positionOnField"].x,
+                        frame["FieldBall"]["positionOnField"].y,
+                    ]
+                    teammate_loc = []
+                    for teammate in frame["GlobalTeammatesModel"]["teammates"]:
+                        teammate_loc.append(
+                            [teammate.pose.translation.x, teammate.pose.translation.y]
+                        )
+
+                    opponent_loc = []
+                    for opponent in frame["GlobalOpponentsModel"]["opponents"]:
+                        # Have to convert to global coordinates
+                        opponent_loc.append(
+                            [
+                                opponent.position.x
+                                + frame["RobotPose"]["translation"].x,
+                                opponent.position.y
+                                + frame["RobotPose"]["translation"].y,
+                            ]
+                        )
+                    obs = OBS.getObservation(
+                        agentLoc,
+                        ball_loc,
+                        teammate_loc,
+                        opponent_loc,
+                        playerNumber,
+                        "soccer",
                     )
+                    # print(frame["MotionRequest"]["kickType"])
+                    # print(frame["MotionRequest"]["kickLength"])
+                    # print(frame["MotionRequest"]["alignPrecisely"])
+                    # print(frame["MotionRequest"]["targetDirection"])
+                    kickLength = frame["MotionRequest"]["kickLength"]
 
-                opponent_loc = []
-                for opponent in frame["GlobalOpponentsModel"]["opponents"]:
-                    # Have to convert to global coordinates
-                    opponent_loc.append(
+                    acts = None
+                    # for message in frame.Annotations:
+                    #     if message["name"] == "policy_action":
+                    #         acts = ast.literal_eval(
+                    #             "[" + message["annotation"][1:-1] + "]"
+                    #         )
+                    alignPreciselyModified = 0
+                    if frame["MotionRequest"]["alignPrecisely"].value == 0:
+                        alignPreciselyModified = 1
+                    elif frame["MotionRequest"]["alignPrecisely"].value == 1:
+                        alignPreciselyModified = 0
+                    elif frame["MotionRequest"]["alignPrecisely"].value == 2:
+                        alignPreciselyModified = 0.5
+
+                    if acts is None:
+                        acts = [
+                            frame["MotionInfo"]["speed"]["translation"].x,
+                            frame["MotionInfo"]["speed"]["translation"].y,
+                            frame["MotionInfo"]["speed"]["rotation"],
+                            frame["MotionRequest"]["kickType"],
+                            kickLength if kickLength < 1e7 else 0,
+                            alignPreciselyModified,
+                            # -7,  # stand
+                        ]
+
+                    if acts is None:
+                        raise Exception("acts is None")
+
+                    writer.writerow(
                         [
-                            opponent.position.x + frame["RobotPose"]["translation"].x,
-                            opponent.position.y + frame["RobotPose"]["translation"].y,
+                            frame.index,
+                            agentLoc,
+                            ball_loc,
+                            *acts,
+                            frame["GameControllerData"]["rollOutResult"],
+                            frame.jsonName,
                         ]
                     )
-                obs = OBS.getObservation(
-                    agentLoc,
-                    ball_loc,
-                    teammate_loc,
-                    opponent_loc,
-                    playerNumber,
-                    "soccer",
-                )
-                acts = []
-                for message in frame.Annotations:
-                    if message["name"] == "policy_action":
-                        acts =  ast.literal_eval('[' + message["annotation"][1:-1] + "]")
 
-                if prev_obs is not None:
-                    transitions.append(())
-                prev_obs = obs
-                OBS.stepObservationHistory(agentLoc, ball_loc, playerNumber)
-                # obs, acts, infos, next_obs, dones
-            elif state != GAME_STATE["playing"]:
-                if state != prev_state:
-                    print(state)
-                    print(frame.jsonName)
-                pass
-            # elif state == GAME_STATE["ownKickOff"]:
-            #     pass
-            # elif state == GAME_STATE["setupOpponentKickOff"]:
-            #     pass
-            # elif state == GAME_STATE["waitForOpponentKickOff"]:
-            #     pass
-            # elif state == GAME_STATE["opponentKickOff"]:
-            #     pass
-            # elif state == GAME_STATE["opponentGoalKick"]:
-            #     pass
-            else:
-                print(gameState["state"])
-            prev_state = state
-        except KeyError as e:
-            collisions.append((frame.index, frame.classNames, e))
+                    if prev_obs is not None:
+                        transitions.append((prev_obs, acts, None, obs, False))
+                    prev_obs = obs
+                    OBS.stepObservationHistory(agentLoc, ball_loc, playerNumber)
+                    # obs, acts, infos, next_obs, dones
+                elif state != GAME_STATE["playing"]:
+                    if (
+                        prev_state == GAME_STATE["playing"]
+                        and state == GAME_STATE["ownKickOff"]
+                    ):
+                        writer.writerow(
+                            [
+                                frame.index,
+                                *(["-"]*8),
+                                frame["GameControllerData"]["rollOutResult"],
+                                frame.jsonName,
+                            ]
+                        )
+                        transitions.pop()  # Remove the last transition that might be wrong
+                        # Set the done flag for the last state
+                        transitions[-1] = tuple(list(transitions[-1])[:-1] + [True])
 
-        # if len(frame.dummyMessages)!=0:
-        #     print(1)
-    # print(collisions)
+                    # print(state)
+                    # print(frame.jsonName)
+                    # if state != prev_state:
+                    #     print(state)
+                    #     print(frame.jsonName)
+                    # pass
+                # elif state == GAME_STATE["ownKickOff"]:
+                #     pass
+                # elif state == GAME_STATE["setupOpponentKickOff"]:
+                #     pass
+                # elif state == GAME_STATE["waitForOpponentKickOff"]:
+                #     pass
+                # elif state == GAME_STATE["opponentKickOff"]:
+                #     pass
+                # elif state == GAME_STATE["opponentGoalKick"]:
+                #     pass
+                else:
+                    print(gameState["state"])
+                prev_state = state
+            except KeyError as e:
+                collisions.append((frame.index, frame.classNames, e))
+
+            # if len(frame.dummyMessages)!=0:
+            #     print(1)
+        # print(collisions)
 
 
 profiler = cProfile.Profile()
