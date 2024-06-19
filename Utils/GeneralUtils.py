@@ -33,7 +33,7 @@ def findClosestValidValue(list: Union[List, NDArray], index, null_value=-1):
     return presult
 
 
-def dumpObj(obj, indent=2) -> str:
+def dumpJson(obj, indent=2) -> str:
     return json.dumps(obj, indent=indent, cls=SpecialEncoder)
 
 

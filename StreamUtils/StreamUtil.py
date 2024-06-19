@@ -1,3 +1,4 @@
+import functools
 import io
 from mmap import mmap
 from typing import Any, List, Tuple, Union
@@ -70,13 +71,12 @@ class StreamUtil:
         return self.stream.tell()
 
     def seek(self, offset, whence=0) -> None:
-        if whence == io.SEEK_CUR:
-            if self.size() < self.tell() + offset:
-                raise EOFError("Not enough data to seek")
-            self._pbar.update(offset)
-
+        origin=self.tell()
         self.stream.seek(offset, whence)
-
+        if whence == io.SEEK_CUR:
+            self._pbar.update(offset)
+        elif whence == io.SEEK_SET:
+            self._pbar.update(offset - origin)
     def size(self) -> int:
         """Total size of StreamUtil's stream"""
         if isinstance(self.stream, io.BytesIO):
@@ -111,11 +111,11 @@ class StreamUtil:
 
     def atEnd(self):
         pos = self.tell()
-        self.seek(0, io.SEEK_END)
+        self.stream.seek(0, io.SEEK_END)
         if self.tell() == pos:
             return True
         else:
-            self.seek(pos)
+            self.stream.seek(pos)
             return False
 
     def probe(self, numBytes) -> bytes:

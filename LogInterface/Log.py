@@ -1,10 +1,12 @@
 import io
 import os
-from enum import Enum
+import csv
+from enum import Enum, auto
 from mmap import mmap
 from pathlib import Path
-from typing import List, Type, Union
-
+from typing import Any, List, Type, Union
+from numpy.typing import NDArray
+from Primitive.PrimitiveDefinitions import Bool
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
@@ -12,12 +14,13 @@ from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import Frame
 from .LogInterfaceBase import LogInterfaceBase
-from .Message import Message
+from .Message import Message, MessageAccessor
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
 from .UncompressedChunk import UncompressedChunk as UChunk
 
+CsvWriter = Any
 # TODO: separate top/root level specific functions into a separate class
 
 """
@@ -43,6 +46,13 @@ class Log(LogInterfaceBase):
     4. Do something on the parsed data
     """
 
+    class EvalInformationFormat(Enum):
+        PICKLE = 0
+        CSV = auto()
+
+    # TODO: Move it to a config file
+    evalInformationFormat = EvalInformationFormat.CSV
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -56,6 +66,10 @@ class Log(LogInterfaceBase):
         # Root specific fields
         self.file: MemoryMappedFile
         self._logFilePath: str
+
+        # cache
+        self._messageIndexCSVWriter_cached: CsvWriter  # csv writer
+        self._messageCachedReprList_cached: NDArray[Bool]
 
     def __getitem__(self, key: Union[int, str, ChunkEnum]) -> Chunk:
         """Allow to use [<chunk idx>/<chunk name>/<chunk enum>] to access a chunk"""
@@ -86,6 +100,15 @@ class Log(LogInterfaceBase):
     def logFilePath(self) -> str:
         return self._logFilePath
 
+    @property
+    def messageIndexCSVWriter(self) -> CsvWriter:
+        if hasattr(self, "_messageIndexCSVWriter_cached"):
+            return self._messageIndexCSVWriter_cached
+        else:
+            f = open(f"{Path(self.logFilePath).stem}/messageIndex.csv", "w")
+            self._messageIndexCSVWriter_cached = csv.writer(f)
+        return self._messageIndexCSVWriter_cached
+
     def __getstate__(self):
         state = super().__getstate__()
         if state.get("file", None):
@@ -112,7 +135,7 @@ class Log(LogInterfaceBase):
             try:
                 self.pickleLoad()
                 return
-            except EOFError:  # Something wrong with the indexes file, remove it
+            except EOFError as e:  # Something wrong with the indexes file, remove it
                 os.remove(self.picklePath)
                 pass
 
@@ -132,7 +155,8 @@ class Log(LogInterfaceBase):
             match chunkMagicBit:
                 case ChunkEnum.UncompressedChunk.value:
                     self.UncompressedChunk = UChunk(self)
-                    self.UncompressedChunk.eval(sutil, offset)
+                    # self.UncompressedChunk.eval(sutil, offset)
+                    self.UncompressedChunk.eval_large(sutil, offset)
                     self._children.append(self.UncompressedChunk)
                 case ChunkEnum.CompressedChunk.value:
                     raise NotImplementedError("Compressed chunk not implemented")
@@ -160,14 +184,14 @@ class Log(LogInterfaceBase):
         self.pickleDump()
 
     def parseBytes(self):
-        if os.path.isfile(self.picklePath):
-            try:
-                self.pickleLoad()
-            except EOFError:  # Something wrong with the indexes file, remove it
-                os.remove(self.picklePath)
         for i in self.children:
             i.parseBytes()
         self.pickleDump()
+
+    @property
+    def numMessages(self) -> int:
+        """The number of messages in this frame"""
+        return len(self.messages)
 
     @property
     def picklePath(self) -> Path:
@@ -206,3 +230,9 @@ class Log(LogInterfaceBase):
     @property
     def children(self) -> List[Chunk]:
         return self._children
+
+    def getMessageAccessor(self) -> MessageAccessor:
+        return MessageAccessor(self)
+
+    def getFrameAccessor(self) -> FrameAccessor:
+        return FrameAccessor(self)

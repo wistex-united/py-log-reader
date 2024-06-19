@@ -7,8 +7,7 @@ class MemoryMappedFile:
     """
     This class is modified from BadgerRLSystem's C++ class
     At:
-    https://github.com/bhuman/BHumanCodeRelease
-    Src/Libs/Platform/MemoryMappedFile
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/Platform/MemoryMappedFile.h
     """
 
     def __init__(self, filename: str):

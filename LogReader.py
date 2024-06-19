@@ -7,26 +7,28 @@ from typing import List
 import imitation
 import tqdm
 from imitation.data import serialize
-from imitation.data.types import Transitions
+from imitation.data.types import Transitions, TrajectoryWithRew
 
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils.Observation import Observation
+from Utils import ObservationJosh
 
 
 def main():
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
-    LOG.readLogFile("traj10_bh.log")
+    # LOG.readLogFile("traj9_bh.log")
+    LOG.readLogFile("traj12_formal.log")
     LOG.eval()
     LOG.parseBytes()
     # for frame in tqdm.tqdm(LOG.frames):
     #     frame.saveFrameDict()
     #     frame.saveImageWithMetaData(slientFail=True)
     # return
+    
 
-    OBS = Observation("soccer")
+    OBS = ObservationJosh("WalkToBall")
     index = 0
 
     collisions = []
@@ -52,6 +54,8 @@ def main():
                 "jsonFile",
             ]
         )
+        prevAgentLoc = None
+        prevBallLoc=None
         for frame in LOG.UncompressedChunk.threads["Cognition"]:
             # if frame.hasImage:
             #     frame.saveImageWithMetaData()
@@ -71,7 +75,7 @@ def main():
                         frame["RobotPose"]["translation"].y,
                         frame["RobotPose"]["rotation"].value,
                     ]
-                    ball_loc = [
+                    ballLoc = [
                         frame["FieldBall"]["positionOnField"].x,
                         frame["FieldBall"]["positionOnField"].y,
                     ]
@@ -94,12 +98,11 @@ def main():
                         )
                     obs = OBS.getObservation(
                         agentLoc,
-                        ball_loc,
-                        teammate_loc,
-                        opponent_loc,
-                        playerNumber,
-                        "soccer",
+                        ballLoc
                     )
+                    prevAgentLoc=agentLoc if prevAgentLoc is None else prevAgentLoc
+                    prevBallLoc=ballLoc if prevBallLoc is None else prevBallLoc
+                    reward=OBS.getReward(agentLoc,prevAgentLoc,ballLoc,prevBallLoc,OBS.ballInGoal(ballLoc),OBS.ballOutOfFieldBounds(ballLoc),OBS.ballInGoalArea(ballLoc),0)
                     # print(frame["MotionRequest"]["kickType"])
                     # print(frame["MotionRequest"]["kickLength"])
                     # print(frame["MotionRequest"]["alignPrecisely"])
@@ -138,17 +141,19 @@ def main():
                         [
                             frame.index,
                             agentLoc,
-                            ball_loc,
+                            ballLoc,
                             *acts,
                             frame["GameControllerData"]["rollOutResult"],
                             frame.jsonName,
                         ]
                     )
 
-                    if prev_obs is not None:
-                        transitions.append([prev_obs, acts, None, obs, False])
+                    # if prev_obs is not None:
+                    #     transitions.append([prev_obs, acts, None, obs, False])
+                    
                     prev_obs = obs
-                    OBS.stepObservationHistory(agentLoc, ball_loc, playerNumber)
+                    OBS.stepObservationHistory(obs) 
+
                     # obs, acts, infos, next_obs, dones
                 elif state != GAME_STATE["playing"]:
                     if (
@@ -189,9 +194,20 @@ def main():
         # print(collisions)
 
     obs, acts, infos, next_obs, dones = map(np.array, zip(*transitions))
-    np.savez(f"{Path(LOG.logFilePath).stem}/transitions.npz", obs=obs, acts=acts, infos=infos, next_obs=next_obs, dones=dones)
+    np.savez(
+        f"{Path(LOG.logFilePath).stem}/transitions.npz",
+        obs=obs,
+        acts=acts,
+        infos=infos,
+        next_obs=next_obs,
+        dones=dones,
+    )
+
+    #obs, acts, infos, rewards, terminate(bool) 
+
 
     # imitationLearningTransitions=Transitions(obs, acts, infos, next_obs, dones)
+
 
 # profiler = cProfile.Profile()
 # # Start profiling

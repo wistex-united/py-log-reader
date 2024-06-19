@@ -12,5 +12,7 @@ LogInterface/LogClasses/*
 *.prof
 *.pkl
 *.pickle
+*.csv
+*.npz
 !rb6.log
 /chkxw_utils

@@ -64,7 +64,7 @@ class Stopwatch(DataClass):
 
     def asDict(self):
         return {
-            "names": self.names,
+            "names": {watchId: name for watchId, name in sorted(self.names.items())},
             "infos": {
                 (self.names[watchId] if watchId in self.names else watchId): (
                     info if info != EMPTY_INDICATOR else None
@@ -98,14 +98,14 @@ class Timer:
 
     def __del__(self):
         # Ensure the shared memory is unlinked and closed
-        if hasattr(self, 'sharedMemory'):
+        if hasattr(self, "sharedMemory"):
             try:
                 self.sharedMemory.close()
             except Exception as e:
                 print(f"Error closing shared memory: {e}")
 
             try:
-                self.sharedMemory.unlink() # Just in case the file is not unlinked
+                self.sharedMemory.unlink()  # Just in case the file is not unlinked
             except Exception as e:
                 pass
 
@@ -199,6 +199,8 @@ class Timer:
             else:
                 raise IndexError(f"Index {watchId} out of range")
 
+        self.storage[index][-2] = stopwatch.frameNo
+        self.storage[index][-1] = stopwatch.threadStartTime
         # self.interpolateTimeCost(EMPTY_INDICATOR) interpolate it directly?
 
     def interpolatedInfos(self) -> NDArray[UInt]:

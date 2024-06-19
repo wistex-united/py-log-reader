@@ -7,14 +7,15 @@ from typing import Any, Dict, List, Tuple, Union
 from PIL import PngImagePlugin
 
 from StreamUtils import StreamUtil
-from Utils import dumpObj
+from Utils import dumpJson
 
 from .Chunk import Chunk
 from .DataClasses import Timer
 from .LogInterfaceBase import LogInterfaceBase
 from .Message import Message
 
-
+class FrameIterator:
+    def __init__(self, frame: Frame):
 class Frame(LogInterfaceBase):
     _threadWithTimestamp: List[str] = [
         "Upper",
@@ -35,7 +36,7 @@ class Frame(LogInterfaceBase):
         self._threadIndex_cached: int
         self._timestamp_cached: int
         self._timer_cached: Timer
-        self._absMessageOffset_cached: int
+        self._absMessageIndexStart_cached: int
 
     @property
     def messages(self) -> List[Message]:
@@ -58,7 +59,7 @@ class Frame(LogInterfaceBase):
 
         dummyEnd = 0
 
-        byteIndex = sutil.tell()
+        byteIndex = startPos
 
         MessageID: Any = self.log.MessageID  # type: ignore MessageID is actually Type[Enum]
         while True:
@@ -117,11 +118,11 @@ class Frame(LogInterfaceBase):
         TODO: Do I really need this function?
         """
         if (
-            index < self.messages[0].absMessageIndex
-            or index > self.messages[-1].absMessageIndex
+            index < self.messages[0].absIndex
+            or index > self.messages[-1].absIndex
         ):
             raise IndexError(f"Index {index} out of range")
-        return self.messages[index - self.messages[0].absMessageIndex]
+        return self.messages[index - self.messages[0].absIndex]
 
     # Message Related Information
     @property
@@ -154,9 +155,9 @@ class Frame(LogInterfaceBase):
         return self._threadIndex_cached
 
     @property
-    def absMessageIndexRange(self) -> Tuple[int, int]:
+    def absIndexRange(self) -> Tuple[int, int]:
         """Absolute message index range of this frame"""
-        return (self.messages[0].absMessageIndex, self.messages[-1].absMessageIndex)
+        return (self.messages[0].absIndex, self.messages[-1].absIndex)
 
     @property
     def numMessages(self) -> int:
@@ -249,23 +250,27 @@ class Frame(LogInterfaceBase):
         return self._timer_cached
 
     @property
-    def absMessageOffset(self) -> int:
+    def absMessageIndexStart(self) -> int:
         """Absolute message index in the whole file (after removing the dummy messages)"""
-        if hasattr(self, "_absMessageOffset_cached"):
-            return self._absMessageOffset_cached
+        if hasattr(self, "_absMessageIndexStart_cached"):
+            return self._absMessageIndexStart_cached
         cnt = 0
         for frame in self.parent.children:
-            frame._absMessageOffset_cached = cnt
+            frame._absMessageIndexStart_cached = cnt
             cnt += len(frame.messages) + len(frame.dummyMessages)
-        return self._absMessageOffset_cached
+        return self._absMessageIndexStart_cached
 
+    @property
+    def absMessageIndexEnd(self) -> int:
+        return self.absMessageIndexStart+len(self.dummyMessages) + len(self.messages)
+    
     def asDict(self) -> Dict:
         """Almost everything you need to know about this frame"""
         return {"Info": self.infoDict, "ReprsDict": self.reprsDict}
 
     def __str__(self) -> str:
         """Convert the frame object to string"""
-        return dumpObj(self.asDict(), indent=self.strIndent)
+        return dumpJson(self.asDict(), indent=self.strIndent)
 
     def __getitem__(self, key: Union[int, str, Enum]) -> Message:
         """
@@ -405,7 +410,7 @@ class Frame(LogInterfaceBase):
         if self.hasImage and self.imageMessage is not None:
             return (
                 Path(self.logFilePath).stem
-                + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_M{self.imageMessage.absMessageIndex}_Bf{self.startByte}_Bt{self.endByte}.png"
+                + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_M{self.imageMessage.absIndex}_Bf{self.startByte}_Bt{self.endByte}.png"
             )
         else:
             raise ValueError("This frame does not have an image")
