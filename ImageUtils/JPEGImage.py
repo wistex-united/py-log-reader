@@ -5,7 +5,6 @@ import numpy as np
 from PIL.Image import fromarray, open
 
 from LogInterface import DataClass
-from Primitive import *
 from StreamUtils import StreamUtil
 
 from .Image import Image as ImageBase

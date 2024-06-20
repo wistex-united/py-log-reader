@@ -1,7 +1,5 @@
 from numpy import ndarray
 
-from .PixelTypes import *
-
 
 class Image:
     def __init__(self, width: int = 0, height: int = 0, padding: int = 0):

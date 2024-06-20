@@ -1,6 +1,5 @@
 import shlex
 
-from Primitive import *
 from StreamUtils import StreamUtil
 
 from .DataClass import DataClass

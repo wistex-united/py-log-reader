@@ -6,19 +6,18 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import Dict, List, TypeAlias
+from typing import Dict, List
+
 import numpy as np
-
 from tqdm import tqdm
-from Primitive.PrimitiveDefinitions import UChar, UInt
 
+from Primitive.PrimitiveDefinitions import UChar
 from StreamUtils import *
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass, Stopwatch, Timer
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
-from Utils import MemoryMappedFile
 
 SutilCursor = int
 AbsoluteByteIndex = int

@@ -28,12 +28,10 @@ class LogInterfaceBase(ABC):
     @abstractmethod
     def children(self) -> List["LogInterfaceBase"]:
         """Helper property used for __iter__ and __len__, it should be set to child objects that makes sense"""
-        pass
 
     @abstractmethod
     def eval(self, sutil: StreamUtil, offset: int = 0):
         """Only read necessary bytes to calculate the start and end byte of this object, create the hierarchical tree but does not parse bytes into data classes"""
-        pass
 
     def __getitem__(self, key) -> Any:
         """Allow to use [<attribute name>] to access attributes"""

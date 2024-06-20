@@ -1,4 +1,3 @@
-from Primitive import *
 from StreamUtils import StreamAble, StreamUtil
 
 from .DataClass import DataClass

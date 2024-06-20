@@ -1,11 +1,13 @@
+import csv
 import io
 import os
-import csv
 from enum import Enum, auto
 from mmap import mmap
 from pathlib import Path
 from typing import Any, List, Type, Union
+
 from numpy.typing import NDArray
+
 from Primitive.PrimitiveDefinitions import Bool
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
@@ -13,8 +15,8 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import FrameAccessor, Frames
-from .LogInterfaceBase import LogInterfaceBase, LogInterfaceInstanceClass
-from .Message import MessageBase, MessageAccessor, Messages
+from .LogInterfaceBase import LogInterfaceInstanceClass
+from .Message import MessageAccessor, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
@@ -137,7 +139,6 @@ class Log(LogInterfaceInstanceClass):
                 return
             except EOFError as e:  # Something wrong with the indexes file, remove it
                 os.remove(self.picklePath)
-                pass
 
         self._children = []
 

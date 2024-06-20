@@ -1,4 +1,3 @@
-import functools
 import io
 from mmap import mmap
 from typing import Any, List, Tuple, Union
