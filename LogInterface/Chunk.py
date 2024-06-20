@@ -3,10 +3,10 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import List
 
-from .LogInterfaceBase import LogInterfaceBase
+from .LogInterfaceBase import LogInterfaceInstanceClass
 
 
-class Chunk(LogInterfaceBase):
+class Chunk(LogInterfaceInstanceClass):
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -30,6 +30,10 @@ class Chunk(LogInterfaceBase):
         return []
 
     @property
+    def absIndex(self) -> int:
+        raise NotImplementedError("Absolute index of Chunk is meaningless")
+
+    @property
     def size(self):  # -> Any:
         return self.endByte - self.startByte
 
@@ -40,7 +44,7 @@ class Chunk(LogInterfaceBase):
 
     @property
     def picklePath(self) -> Path:
-        return self.log.cacheDir / f"Chunk_{self.ChunkEnum.name}.pkl" # type: ignore
+        return self.log.cacheDir / f"Chunk_{self.ChunkEnum.name}.pkl"  # type: ignore
 
 
 class ChunkEnum(Enum):

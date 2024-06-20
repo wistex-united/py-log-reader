@@ -26,6 +26,7 @@ from .LogInterfaceBase import (
     IndexMap,
 )
 
+Messages = Union[List["MessageInstance"], "MessageAccessor"]
 
 class MessageBase(LogInterfaceBase):
     # Core Properties
@@ -40,11 +41,15 @@ class MessageBase(LogInterfaceBase):
         pass
 
     # Parse bytes
-    def parseBytes(self):
+    def parseBytes(self) -> DataClass:
         """@Override: Parse the message body bytes into a representation object, which hold the information of the message"""
-        sutil = StreamUtil(MemoryMappedFile(self.logFilePath).getData())
-        sutil.seek(self.startByte + 4, io.SEEK_SET)
-        self._reprObject = self.classType.read(sutil)
+        if self.loadRepr():
+            pass
+        else:
+            sutil = StreamUtil(self.logBytes)
+            sutil.seek(self.startByte + 4, io.SEEK_SET)
+            self.reprObject = self.classType.read(sutil)
+        return self.reprObject
 
     @staticmethod
     def parseBytesWrapper(
@@ -69,6 +74,7 @@ class MessageBase(LogInterfaceBase):
     @property
     @abstractmethod
     def reprDict(self) -> Dict[str, Any]:
+        """Representation object as dict"""
         pass
 
     @property
@@ -170,9 +176,10 @@ class MessageBase(LogInterfaceBase):
             pickle.dump(reprObject, f)
 
     def loadRepr(self) -> bool:
+        """Load the representation object from the pickle file, returns whether it has been loaded successfully"""
         if self.hasPickledRepr():
             try:
-                self._reprObject = pickle.load(open(self.reprPicklePath, "rb"))
+                self.reprObject = pickle.load(open(self.reprPicklePath, "rb"))
             except EOFError:
                 return False
             return True
@@ -233,7 +240,7 @@ class MessageBase(LogInterfaceBase):
         self,
         dir: Path,
         imgName: str,
-        metadata=PngImagePlugin.PngInfo | None,
+        metadata=Optional[PngImagePlugin.PngInfo],
         slientFail: bool = False,
     ):
         if self.isImage:
@@ -261,7 +268,6 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
 
         # cache
         self._reprDict_cached: Dict[str, Any]
-        self._absIndex_cached: int
 
     def hasPickledRepr(self) -> bool:
         if (
@@ -316,17 +322,7 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
     def reprObj(self) -> DataClass:
         """The representation object"""
         if not hasattr(self, "_reprObject"):
-            if self.hasPickledRepr():
-                if self.loadRepr():
-                    return self._reprObject
-                else:
-                    raise ValueError(
-                        "Message has cached representation object, but failed to load it"
-                    )
-            else:
-                raise ValueError(
-                    "Message has no representation object, please parse the message first"
-                )
+            self.parseBytes()
         return self._reprObject
 
     @reprObj.setter
@@ -349,7 +345,6 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
 
     @property
     def reprDict(self) -> Dict[str, Any]:
-        """Representation object as dict"""
         if hasattr(self, "_reprDict_cached") and self._reprDict_cached:
             return self._reprDict_cached
         else:
@@ -389,7 +384,7 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
 
     @property
     def absIndex(self) -> int:
-        """Absolute message index in the whole file (after removing the dummy messages)"""
+        """Absolute message index in the whole file"""
         if hasattr(self, "_absIndex_cached"):
             return self._absIndex_cached
         if isinstance(self.frame, LogInterfaceInstanceClass):
@@ -413,10 +408,13 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
 
 
 class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
-    messageidxFileName: str = "messageIndexFile.cache"
+    messageIdxFileName: str = "messageIndexFile.cache"
+    maxCachedReprObj: int = 200
 
     @staticmethod
     def decodeIndexBytes(bytes: bytes) -> Tuple[int, int, int, int]:
+        if len(bytes) != MessageAccessor.messageIdxByteLength:
+            raise ValueError(f"Invalid index bytes length: {len(bytes)}")
         parsedBytes = np.frombuffer(
             bytes,
             dtype=np.uint64,
@@ -428,12 +426,11 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             int(parsedBytes[3]),
         )
 
-    def __init__(self, log: Any, indexMap: Optional[IndexMap]):
+    def __init__(self, log: Any, indexMap: Optional[IndexMap]=None):
         LogInterfaceAccessorClass.__init__(self, log, indexMap)
         # cache
-        self._reprDict_cached: Dict[str, Any]
-        self._parent: LogInterfaceBase
-        self._parentIsAssigend: bool = False
+        self._reprObj_cached: Dict[int, DataClass] = {}
+        self._reprDict_cached: Dict[int, Dict[str, Any]] = {}
 
     def __getitem__(self, indexOrKey: Union[int, str]) -> Any:
         """Two mode, int index can change the Accessor's index; while str index can fetch an attribute from current message repr object"""
@@ -447,11 +444,31 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         return result
 
     # Core Properties
+    @property
+    def logId(self) -> UChar:
+        return UChar(int.from_bytes(self.headerBytes[0:1], "little"))
+
+    @property
+    def reprObj(self) -> DataClass:
+        if not self.isParsed():
+            self.parseBytes()
+        return self._reprObj_cached[self.absIndex]
+
+    @reprObj.setter
+    def reprObj(self, value: DataClass):
+        """Set the representation object"""
+        if not isinstance(value, self.classType):
+            raise ValueError("Invalid representation object")
+        if isinstance(value, Annotation):
+            value.frame = self.frame.threadName
+        self._reprObj_cached[self.absIndex] = value
+        if len(self._reprObj_cached) > self.maxCachedReprObj:
+            self._reprObj_cached.pop(next(iter(self._reprObj_cached)))
 
     # Index file related
     @staticmethod
     def idxFileName() -> str:
-        return MessageAccessor.messageidxFileName
+        return MessageAccessor.messageIdxFileName
 
     @property
     def indexFileBytes(self) -> bytes:
@@ -469,7 +486,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         return self.decodeIndexBytes(self.indexFileBytes)
 
     @property
-    def frameAbsIndex(self) -> int:
+    def frameIndex(self) -> int:
         return self.messageByteIndex[1]
 
     @property
@@ -480,50 +497,18 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
     def endByte(self) -> int:
         return self.messageByteIndex[3]
 
-    # index & absIndex
-    @property
-    def index(self) -> int:
-        """
-        The index of current item in the parent's children (another LogInterfaceAccessorClass)
-        """
-        return self.clacRelativeIndex(self.absIndex, self.parent.children.indexMap)  # type: ignore
-
-    @index.setter
-    def index(self, value: int):
-        self.absIndex = self.parent.children.indexMap[value]  # type: ignore
-
-    @property
-    def absIndex(self) -> int:
-        """The location of current index in the messageIndexFile"""
-        return self.indexMap[self.indexCursor]
-
-    @absIndex.setter
-    def absIndex(self, value: int):
-        self.indexCursor = self.clacRelativeIndex(
-            value, self.indexMap
-        )  # Will raise ValueError if not in indexMap
-
-    # parent
-    def assignParent(self, parent: Any):
-        self._parent = parent
-        # TODO: update self.indexMap based on parent's absIndex
-        self._parentIsAssigend = True
-
-    @property
-    def parentIsAssigend(self) -> bool:
-        return self._parentIsAssigend
-
+    # Parent
     @property
     def parent(self) -> Union[LogInterfaceAccessorClass, LogInterfaceInstanceClass]:
         if not self.parentIsAssigend:  # Fake a parent
             self._parent = (
                 self.log.getFrameAccessor()
             )  # instantiate a FrameAccessor without any constraints
-            self._parent.absIndex = self.frameAbsIndex
+            self._parent.absIndex = self.frameIndex
 
         if isinstance(self._parent, LogInterfaceAccessorClass):
             if not self.parentIsAssigend:
-                self._parent.absIndex = self.frameAbsIndex
+                self._parent.absIndex = self.frameIndex
             return self._parent
         elif isinstance(self._parent, LogInterfaceInstanceClass):  # Must be assigned
             return self._parent
@@ -535,7 +520,35 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             "Accessor is only used to access messages already evaluated, it cannot eval"
         )
 
+    def isParsed(self) -> bool:
+        return self.absIndex in self._reprObj_cached
+
     def hasPickledRepr(self) -> bool:
         if os.path.isfile(self.reprPicklePath):  # type: ignore
             return True
         return False
+
+    @property
+    def reprDict(self) -> Dict[str, Any]:
+        if self.absIndex not in self._reprDict_cached:
+            if isinstance(self.reprObj, Stopwatch):
+                # We don't want to replace our orignal Stopwatch object
+                self._reprDict_cached[self.absIndex] = self.frame.timer.getStopwatch(
+                    self.frameIndex
+                ).asDict()
+            else:
+                self._reprDict_cached[self.absIndex] = self.reprObj.asDict()
+        return self._reprDict_cached[self.absIndex]
+    @staticmethod
+    def getInstanceClass() -> Type["MessageInstance"]:
+        return MessageInstance
+    def getInstance(self) -> MessageInstance:
+        result: MessageInstance = LogInterfaceAccessorClass.getInstance(self)  # type: ignore
+        result._parent = self.parent
+        result._startByte = self.startByte
+        result._endByte = self.endByte
+        result._logId = UChar(self.logId)
+        if self.isParsed():
+            result.reprObj = self.reprObj
+        result._absIndex_cached = self.absIndex
+        return result

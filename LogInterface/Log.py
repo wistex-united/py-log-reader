@@ -12,9 +12,9 @@ from Utils import MemoryMappedFile
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
-from .Frame import Frame
-from .LogInterfaceBase import LogInterfaceBase
-from .Message import Message, MessageAccessor
+from .Frame import FrameAccessor, Frames
+from .LogInterfaceBase import LogInterfaceBase, LogInterfaceInstanceClass
+from .Message import MessageBase, MessageAccessor, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
@@ -36,7 +36,7 @@ SettingsChunk MessageIDsChunk TypeInfoChunk (Un)CompressedChunk IndicesChunk
 """
 
 
-class Log(LogInterfaceBase):
+class Log(LogInterfaceInstanceClass):
     """
     Root class for the Log interface, it holds all the information of the log file in its logBytes field
     To use it,
@@ -156,7 +156,7 @@ class Log(LogInterfaceBase):
                 case ChunkEnum.UncompressedChunk.value:
                     self.UncompressedChunk = UChunk(self)
                     # self.UncompressedChunk.eval(sutil, offset)
-                    self.UncompressedChunk.eval_large(sutil, offset)
+                    self.UncompressedChunk.evalLarge(sutil, offset)
                     self._children.append(self.UncompressedChunk)
                 case ChunkEnum.CompressedChunk.value:
                     raise NotImplementedError("Compressed chunk not implemented")
@@ -216,11 +216,11 @@ class Log(LogInterfaceBase):
         return self.MessageIDChunk.MessageID
 
     @property
-    def frames(self) -> List[Frame]:
+    def frames(self) -> Frames:
         return self.UncompressedChunk.frames
 
     @property
-    def messages(self) -> List[Message]:
+    def messages(self) -> Messages:
         return self.UncompressedChunk.messages
 
     @property
@@ -231,8 +231,28 @@ class Log(LogInterfaceBase):
     def children(self) -> List[Chunk]:
         return self._children
 
+    @property
+    def outputDir(self):
+        return Path(self.logFilePath).parent / Path(self.logFilePath).stem
+
+    @property
+    def imageDir(self):
+        return self.outputDir / f"{Path(self.logFilePath).stem}_images"
+
+    @property
+    def frameDir(self):
+        return self.outputDir / f"{Path(self.logFilePath).stem}_frames"
+
     def getMessageAccessor(self) -> MessageAccessor:
         return MessageAccessor(self)
 
     def getFrameAccessor(self) -> FrameAccessor:
         return FrameAccessor(self)
+
+    def getContentChunk(self) -> UChunk:
+        # TODO: after implementing CompressedChunk, check this to return the true content Chunk
+        return self.UncompressedChunk
+
+    @property
+    def absIndex(self) -> int:
+        raise NotImplementedError("Absolute index of Chunk is meaningless")

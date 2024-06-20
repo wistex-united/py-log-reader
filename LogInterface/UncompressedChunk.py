@@ -16,8 +16,8 @@ from StreamUtils import *
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass, Stopwatch, Timer
-from .Frame import Frame
-from .Message import Message
+from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
+from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from Utils import MemoryMappedFile
 
 SutilCursor = int
@@ -27,22 +27,117 @@ AbsoluteByteIndex = int
 class UncompressedChunk(Chunk):
     def __init__(self, parent):
         super().__init__(parent)
-        self._threads: Dict[str, List[Frame]] = {}
+        self._threads: Dict[str, Frames] = {}
         self._timers: Dict[str, Timer] = {}
 
         # cached index of messages and data objects
-        self._messages_cached: List[Message]
+        self._messages_cached: Messages
         self._reprs_cached: List[DataClass]
 
     @property
-    def frames(self) -> List[Frame]:
-        return self._children
+    def frames(self) -> Frames:
+        return self._children  # type: ignore
 
     @frames.setter
-    def frames(self, value: List[Frame]):
+    def frames(self, value: Frames):
         self._children = value
 
-    def eval_large(self, sutil: StreamUtil, offset: int = 0):
+    def clearIndexFiles(self):
+        messageIdxFilePath: Path = (
+            self.log.cacheDir / MessageAccessor.messageIdxFileName
+        )
+        frameIdxFilePath: Path = self.log.cacheDir / FrameAccessor.frameIdxFileName
+        if messageIdxFilePath.exists():
+            messageIdxFilePath.unlink()
+        if frameIdxFilePath.exists():
+            frameIdxFilePath.unlink()
+
+    # def verifyIndexFiles(self):
+
+    #     messageIdxFilePath: Path = (
+    #         self.log.cacheDir / MessageAccessor.messageIdxFileName
+    #     )
+    #     frameIdxFilePath: Path = self.log.cacheDir / FrameAccessor.frameIdxFileName
+
+    #     findContinuePos = False
+    #     if frameIdxFilePath.exists():
+    #         tempFrameIndexFileHolder = open(frameIdxFilePath, "rb+")
+    #         frameIdxFileSize = frameIdxFilePath.stat().st_size
+    #         remainder = frameIdxFileSize % FrameAccessor.frameIdxByteLength
+    #         validSize = frameIdxFileSize - remainder
+    #         # FrameAccessor
+    #         if validSize < FrameAccessor.frameIdxByteLength:
+    #             # raise Exception("Strange frameIndexFile size")
+    #             self.clearIndexFiles()
+    #             return 0, 0
+
+    #         tempFrameIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
+    #         last32Bytes = tempFrameIndexFileHolder.read(32)
+    #         if remainder != 0:
+    #             tempFrameIndexFileHolder.truncate(frameIdxFileSize - remainder)
+
+    #         lastFrameIndex = (
+    #             np.frombuffer(last32Bytes[0:4], np.uint32)[0],
+    #             last32Bytes[4:16].decode("ascii").rstrip("\0"),
+    #             np.frombuffer(last32Bytes[16:24], np.uint64)[0],
+    #             np.frombuffer(last32Bytes[24:32], np.uint64)[0],
+    #         )
+
+    #         if lastFrameIndex[0] != validSize // 32 - 1:
+    #             raise Exception("frameIndexFile is not valid")
+
+    #         if messageIdxFilePath.exists():
+    #             tempMessageIndexFileHolder = open(messageIdxFilePath, "rb+")
+
+    #             messageIdxFileSize = messageIdxFilePath.stat().st_size
+    #             remainder = messageIdxFileSize % 32
+    #             validSize = messageIdxFileSize - remainder
+    #             if validSize < 32:
+    #                 raise Exception("Strange messageIndexFile size")
+
+    #             tempMessageIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
+    #             last32Bytes = tempMessageIndexFileHolder.read(32)
+    #             if remainder != 0:
+    #                 tempMessageIndexFileHolder.truncate(messageIdxFileSize - remainder)
+
+    #             lastMessageIndex = np.frombuffer(last32Bytes, dtype=np.uint64)
+
+    #             if lastMessageIndex[0] != validSize // 32 - 1:
+    #                 raise Exception("messageIndexFile is not valid")
+    #             if (
+    #                 lastMessageIndex[1] < lastFrameIndex[0]
+    #                 or lastMessageIndex[0] < lastFrameIndex[3] - 1
+    #             ):
+    #                 raise Exception(
+    #                     "frameIndexFile and messageIndexFile are not consistent"
+    #                 )
+    #             else:
+    #                 if (
+    #                     lastMessageIndex[1] > lastFrameIndex[0]
+    #                     and lastMessageIndex[0] > lastFrameIndex[3]
+    #                 ):  # If the are more messages after the last recorded frames
+    #                     tempMessageIndexFileHolder.truncate(
+    #                         int(lastFrameIndex[3]) * 32
+    #                     )  # Cut message file to the end of last frame's last message
+    #                     tempMessageIndexFileHolder.seek(-32, io.SEEK_END)
+    #                     lastMessageIndex = np.frombuffer(
+    #                         tempMessageIndexFileHolder.read(32), dtype=np.uint64
+    #                     )
+    #                 frameCnt = lastFrameIndex[0] + 1
+    #                 messageCnt = lastMessageIndex[0] + 1
+    #                 byteIndex = int(lastMessageIndex[3] - np.uint64(messageStartByte))
+    #                 sutil.seek(int(lastMessageIndex[3]) - offset + startPos)
+    #                 findContinuePos = True
+    #             if not findContinuePos:
+    #                 tempMessageIndexFileHolder.seek(0)
+    #                 tempMessageIndexFileHolder.truncate(0)
+    #             tempMessageIndexFileHolder.close()
+    #         if not findContinuePos:
+    #             tempFrameIndexFileHolder.seek(0)
+    #             tempFrameIndexFileHolder.truncate(0)
+    #         tempFrameIndexFileHolder.close()
+
+    def evalLarge(self, sutil: StreamUtil, offset: int = 0):
 
         startPos: SutilCursor = sutil.tell()
         chunkMagicBit: UChar = sutil.readUChar()
@@ -65,11 +160,13 @@ class UncompressedChunk(Chunk):
         messageCnt = 0
         self.log.cacheDir.mkdir(parents=True, exist_ok=True)
 
-        messageIdxFilePath: Path = self.log.cacheDir / "messageIndexFile.cache"
-        frameIdxFilePath: Path = self.log.cacheDir / "frameIndexFile.cache"
+        messageIdxFilePath: Path = (
+            self.log.cacheDir / MessageAccessor.messageIdxFileName
+        )
+        frameIdxFilePath: Path = self.log.cacheDir / FrameAccessor.frameIdxFileName
 
         # startPosition = sutil.tell()
-
+        findContinuePos = False
         if frameIdxFilePath.exists():
             tempFrameIndexFileHolder = open(frameIdxFilePath, "rb+")
             frameIdxFileSize = frameIdxFilePath.stat().st_size
@@ -134,15 +231,21 @@ class UncompressedChunk(Chunk):
                     messageCnt = lastMessageIndex[0] + 1
                     byteIndex = int(lastMessageIndex[3] - np.uint64(messageStartByte))
                     sutil.seek(int(lastMessageIndex[3]) - offset + startPos)
-
+                    findContinuePos = True
+                if not findContinuePos:
+                    tempMessageIndexFileHolder.seek(0)
+                    tempMessageIndexFileHolder.truncate(0)
                 tempMessageIndexFileHolder.close()
+            if not findContinuePos:
+                tempFrameIndexFileHolder.seek(0)
+                tempFrameIndexFileHolder.truncate(0)
             tempFrameIndexFileHolder.close()
 
-        messageIdxFile = open(self.log.cacheDir / "messageIndexFile", "ab")
-        frameIdxFile = open(self.log.cacheDir / "frameIndexFile", "ab")
+        messageIdxFile = open(messageIdxFilePath, "ab")
+        frameIdxFile = open(frameIdxFilePath, "ab")
 
         while byteIndex < min(usedSize, remainingSize):
-            frame = Frame(self)
+            frame = FrameInstance(self)
             try:
                 frame.eval(sutil, byteIndex + messageStartByte)
             except EOFError:
@@ -196,7 +299,7 @@ class UncompressedChunk(Chunk):
         byteIndex = 0
         frameIndex = []
         while byteIndex < min(usedSize, remainingSize):
-            frame = Frame(self)
+            frame = FrameInstance(self)
             try:
                 frame.eval(sutil, byteIndex + messageStartByte)
             except EOFError:
@@ -207,7 +310,7 @@ class UncompressedChunk(Chunk):
                 self._threads[frame.threadName] = []
                 self._timers[frame.threadName] = Timer()
 
-            self._threads[frame.threadName].append(frame)
+            self._threads[frame.threadName].append(frame)  # type: ignore
 
             frameIndex.append(frame.startByte - messageStartByte)
             byteIndex += frame.size
@@ -221,7 +324,7 @@ class UncompressedChunk(Chunk):
         self._endByte = sutil.tell() - startPos + offset
 
     def parseBytes(self, showProgress: bool = True, cacheRepr: bool = True):
-        Wrapper = partial(Message.parseBytesWrapper, logFilePath=self.logFilePath)
+        Wrapper = partial(MessageBase.parseBytesWrapper, logFilePath=self.logFilePath)
         cached = []
         parsed = []
         unparsed = []
@@ -274,14 +377,14 @@ class UncompressedChunk(Chunk):
             unparsed[idx].reprObj = result
             if isinstance(result, Stopwatch):
                 # if not hasattr(self.messages[idx].frame, "timer"):
-                frameTmp: Frame = unparsed[idx].frame
+                frameTmp: FrameBase = unparsed[idx].frame
                 frameTmp.timer.parseStopwatch(result, frameTmp.index)
         if cacheRepr:
             asyncio.get_event_loop().run_until_complete(
                 self.dumpReprs(results, unparsed)
             )
 
-    async def loadReprs(self, unparsed: List[Message]) -> List[DataClass]:
+    async def loadReprs(self, unparsed: Messages) -> List[DataClass]:
         loop = asyncio.get_running_loop()
         failed = []
 
@@ -291,7 +394,7 @@ class UncompressedChunk(Chunk):
             futures = [
                 loop.run_in_executor(
                     executor,
-                    Message.loadReprWrapper,
+                    MessageBase.loadReprWrapper,
                     unparsed[idx].reprPicklePath,
                     idx,
                 )
@@ -315,7 +418,7 @@ class UncompressedChunk(Chunk):
 
         return failed
 
-    async def dumpReprs(self, results: List[DataClass], unparsed: List[Message]):
+    async def dumpReprs(self, results: List[DataClass], unparsed: Messages):
         loop = asyncio.get_running_loop()
 
         # Create a ThreadPoolExecutor
@@ -324,7 +427,7 @@ class UncompressedChunk(Chunk):
             futures = [
                 loop.run_in_executor(
                     executor,
-                    Message.dumpReprWrapper,
+                    MessageBase.dumpReprWrapper,
                     unparsed[idx].reprPicklePath,
                     results[idx],
                 )
@@ -374,14 +477,14 @@ class UncompressedChunk(Chunk):
         with open(indexFilePath, "r") as f:
             reader = csv.reader(f)
             # next(reader)
-            frame: Frame = None  # type: ignore
+            frame: FrameInstance = None  # type: ignore
             for row in reader:
                 if int(row[2]) == 1:  # idFrameBegin
-                    frame = Frame(self)
+                    frame = FrameInstance(self)
                     frame._children = []
                     frame.dummyMessages = []
 
-                message = Message(frame)
+                message = MessageInstance(frame)
                 message._index_cached = int(row[0])
                 message._logId = UChar(row[2])
                 message._startByte = int(row[3])
@@ -389,7 +492,7 @@ class UncompressedChunk(Chunk):
 
                 if len(frame.children) != message.index:
                     raise ValueError
-                frame._children.append(message)
+                frame._children.append(message)  # type: ignore
                 if int(row[2]) == 2:  # idFrameEnd
                     frame._index_cached = int(row[1])
                     if len(self.frames) != frame.index:
@@ -406,7 +509,7 @@ class UncompressedChunk(Chunk):
                     if threadName not in self._threads:
                         self._threads[threadName] = []
                         self._timers[threadName] = Timer()
-                    self._threads[threadName].append(frame)
+                    self._threads[threadName].append(frame)  # type: ignore
 
         for threadName, threadFrames in self._threads.items():
             self._timers[threadName].initStorage(
@@ -434,16 +537,16 @@ class UncompressedChunk(Chunk):
         return ["frames"]
 
     @property
-    def children(self) -> List[Frame]:
+    def children(self) -> Frames:
         return self.frames
 
     @property
-    def messages(self) -> List[Message]:
+    def messages(self) -> Messages:
         if hasattr(self, "_messages_cached"):
             return self._messages_cached
         self._messages_cached = []
         for frame in self.frames:
-            self._messages_cached.extend(frame.messages)
+            self._messages_cached.extend(frame.messages)  # type: ignore
         return self._messages_cached
 
     @property
@@ -456,11 +559,11 @@ class UncompressedChunk(Chunk):
                 self._reprs_cached.append(message.reprObj)
         return self._reprs_cached
 
-    def thread(self, name: str) -> List[Frame]:
+    def thread(self, name: str) -> Frames:
         return self._threads[name]
 
     @property
-    def threads(self) -> Dict[str, List[Frame]]:
+    def threads(self) -> Dict[str, Frames]:
         return self._threads
 
     @property
