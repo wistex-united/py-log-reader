@@ -14,7 +14,7 @@ from Utils import MemoryMappedFile, SpecialEncoder
 IndexMap = Union[range, List[int]]
 
 
-class LogInterfaceBase(ABC):
+class LogInterfaceBaseClass(ABC):
     strIndent: int = 2
 
     frameIdxFileName: str = "frameIndexFile.cache"
@@ -26,7 +26,7 @@ class LogInterfaceBase(ABC):
 
     @property
     @abstractmethod
-    def children(self) -> List["LogInterfaceBase"]:
+    def children(self) -> List["LogInterfaceBaseClass"]:
         """Helper property used for __iter__ and __len__, it should be set to child objects that makes sense"""
 
     @abstractmethod
@@ -134,7 +134,7 @@ class LogInterfaceBase(ABC):
             i.freeMem()
 
 
-class LogInterfaceAccessorClass(LogInterfaceBase):
+class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     @staticmethod
     @functools.lru_cache(maxsize=1000)
     def getBytesFromMmap(idxFile: mmap, indexStart: int, indexEnd: int) -> bytes:
@@ -149,7 +149,7 @@ class LogInterfaceAccessorClass(LogInterfaceBase):
         self.indexMap = indexMap
         self._idxFile = MemoryMappedFile(log.cacheDir / self.idxFileName())
 
-        self._parent: LogInterfaceBase
+        self._parent: LogInterfaceBaseClass
         self._parentIsAssigend: bool = False
 
         self._indexCursor = 0
@@ -219,7 +219,7 @@ class LogInterfaceAccessorClass(LogInterfaceBase):
         self._indexCursor = value
 
     # Parent and Children
-    def assignParent(self, parent: LogInterfaceBase):
+    def assignParent(self, parent: LogInterfaceBaseClass):
         self._parent = parent
         # TODO: update self.indexMap based on parent's absIndex
         self._parentIsAssigend = True
@@ -295,7 +295,7 @@ class LogInterfaceAccessorClass(LogInterfaceBase):
             raise ValueError("Invalid index range")
 
 
-class LogInterfaceInstanceClass(LogInterfaceBase):
+class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     def __init__(self, parent):
         super().__init__()
         self._parent = parent
@@ -382,5 +382,5 @@ class LogInterfaceInstanceClass(LogInterfaceBase):
         self.__dict__.update(state)
         if hasattr(self, "_children"):
             for idx in range(len(self._children)):
-                if isinstance(self._children[idx], LogInterfaceBase):
+                if isinstance(self._children[idx], LogInterfaceBaseClass):
                     self._children[idx]._parent = self

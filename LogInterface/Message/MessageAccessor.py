@@ -3,10 +3,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from Primitive import *
 from StreamUtils import StreamUtil
+from Utils import MemoryMappedFile
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceInstanceClass,
+)
 from .MessageBase import MessageBase
 from .MessageInstance import MessageInstance
 
@@ -102,6 +106,84 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
     @property
     def endByte(self) -> int:
         return self.messageByteIndex[3]
+
+    @classmethod
+    def validate(cls, idxFile: MemoryMappedFile, absIndex: int, frameIndex: int):
+        size = idxFile.getSize()
+        if size == 0:
+            return False
+        lastIndex = size // cls.messageIdxByteLength - 1
+        if absIndex > lastIndex:
+            return False
+        startByte = absIndex * cls.messageIdxByteLength
+        endByte = startByte + cls.messageIdxByteLength
+        messageIndex = cls.decodeIndexBytes(idxFile.getData()[startByte:endByte])
+        if messageIndex[0] != absIndex:
+            return False
+        if frameIndex != messageIndex[1]:
+            return False
+        return True
+
+    # # Validation
+    # @classmethod
+    # def ensureValid(
+    #     cls,
+    #     log,
+    #     indexMap: Optional[IndexMap] = None,
+    #     CorrectFrameIndexMap: Optional[IndexMap] = None,
+    # ) -> bool:
+    #     indexFilePath = log.cacheDir / cls.idxFileName()
+    #     if not indexFilePath.exists():
+    #         # print(f"Index file not found: {indexFilePath}")
+    #         return False, 0
+    #     tempIdxFile = MemoryMappedFile(indexFilePath)
+    #     size = tempIdxFile.getSize()
+    #     if size // cls.messageIdxByteLength == 0:
+    #         # Not a single message
+    #         return False, 0
+    #     if size % cls.messageIdxByteLength != 0:  # The index file need to be clipped
+    #         size = size - size % cls.messageIdxByteLength
+    #         with open(indexFilePath, "r+b") as f:
+    #             f.truncate(size)
+    #         tempIdxFile.getData().resize(size)
+
+    #     lastIndex = size // cls.messageIdxByteLength - 1
+    #     # messageAccessor = cls(log)
+
+    #     if indexMap is None:
+    #         indexMap = [lastIndex]
+
+    #     def runValidation():
+    #         for i in indexMap:
+    #             if i > lastIndex:
+    #                 return False, lastIndex
+
+    #             startByte = i * cls.messageIdxByteLength
+    #             endByte = startByte + cls.messageIdxByteLength
+    #             messageIndex = cls.decodeIndexBytes(tempIdxFile[startByte:endByte])
+
+    #             if messageIndex[0] != i:
+    #                 return False, i
+    #             if CorrectFrameIndexMap is not None and i < len(CorrectFrameIndexMap):
+    #                 if messageIndex[1] != CorrectFrameIndexMap[i]:
+    #                     return False, i
+
+    #         return True, -1
+
+    #     validTill = lastIndex
+    #     while True:
+    #         result, breakPos = runValidation()
+    #         if result:
+    #             break
+    #         else:
+    #             if breakPos == 0:
+    #                 validTill = 0
+    #                 break
+    #             validTill = breakPos - 1
+    #             indexMap = [breakPos - 1]  # Check if the prev 1 messages are valid
+    #             CorrectFrameIndexMap = None  # Don't check the frame index
+
+    #     return True, validTill
 
     # Parent
     @property

@@ -51,90 +51,85 @@ class UncompressedChunk(Chunk):
         if frameIdxFilePath.exists():
             frameIdxFilePath.unlink()
 
-    # def verifyIndexFiles(self):
+    def verifyIndexFiles(self):
 
-    #     messageIdxFilePath: Path = (
-    #         self.log.cacheDir / MessageAccessor.messageIdxFileName
-    #     )
-    #     frameIdxFilePath: Path = self.log.cacheDir / FrameAccessor.frameIdxFileName
+        messageIdxFilePath: Path = (
+            self.log.cacheDir / MessageAccessor.messageIdxFileName
+        )
+        frameIdxFilePath: Path = self.log.cacheDir / FrameAccessor.frameIdxFileName
 
-    #     findContinuePos = False
-    #     if frameIdxFilePath.exists():
-    #         tempFrameIndexFileHolder = open(frameIdxFilePath, "rb+")
-    #         frameIdxFileSize = frameIdxFilePath.stat().st_size
-    #         remainder = frameIdxFileSize % FrameAccessor.frameIdxByteLength
-    #         validSize = frameIdxFileSize - remainder
-    #         # FrameAccessor
-    #         if validSize < FrameAccessor.frameIdxByteLength:
-    #             # raise Exception("Strange frameIndexFile size")
-    #             self.clearIndexFiles()
-    #             return 0, 0
+        findContinuePos = False
+        if frameIdxFilePath.exists():
+            tempFrameIndexFileHolder = open(frameIdxFilePath, "rb+")
+            frameIdxFileSize = frameIdxFilePath.stat().st_size
+            remainder = frameIdxFileSize % FrameAccessor.frameIdxByteLength
+            validSize = frameIdxFileSize - remainder
+            # FrameAccessor
+            if validSize < FrameAccessor.frameIdxByteLength:
+                # raise Exception("Strange frameIndexFile size")
+                self.clearIndexFiles()
+                return 0, 0
 
-    #         tempFrameIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
-    #         last32Bytes = tempFrameIndexFileHolder.read(32)
-    #         if remainder != 0:
-    #             tempFrameIndexFileHolder.truncate(frameIdxFileSize - remainder)
+            tempFrameIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
+            last32Bytes = tempFrameIndexFileHolder.read(32)
+            if remainder != 0:
+                tempFrameIndexFileHolder.truncate(frameIdxFileSize - remainder)
 
-    #         lastFrameIndex = (
-    #             np.frombuffer(last32Bytes[0:4], np.uint32)[0],
-    #             last32Bytes[4:16].decode("ascii").rstrip("\0"),
-    #             np.frombuffer(last32Bytes[16:24], np.uint64)[0],
-    #             np.frombuffer(last32Bytes[24:32], np.uint64)[0],
-    #         )
+            lastFrameIndex = FrameAccessor.decodeIndexBytes(last32Bytes)
 
-    #         if lastFrameIndex[0] != validSize // 32 - 1:
-    #             raise Exception("frameIndexFile is not valid")
+            if lastFrameIndex[0] != validSize // 32 - 1:
+                raise Exception("frameIndexFile is not valid")
 
-    #         if messageIdxFilePath.exists():
-    #             tempMessageIndexFileHolder = open(messageIdxFilePath, "rb+")
+            if messageIdxFilePath.exists():
+                tempMessageIndexFileHolder = open(messageIdxFilePath, "rb+")
 
-    #             messageIdxFileSize = messageIdxFilePath.stat().st_size
-    #             remainder = messageIdxFileSize % 32
-    #             validSize = messageIdxFileSize - remainder
-    #             if validSize < 32:
-    #                 raise Exception("Strange messageIndexFile size")
+                messageIdxFileSize = messageIdxFilePath.stat().st_size
+                remainder = messageIdxFileSize % 32
+                validSize = messageIdxFileSize - remainder
+                if validSize < 32:
+                    raise Exception("Strange messageIndexFile size")
 
-    #             tempMessageIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
-    #             last32Bytes = tempMessageIndexFileHolder.read(32)
-    #             if remainder != 0:
-    #                 tempMessageIndexFileHolder.truncate(messageIdxFileSize - remainder)
+                tempMessageIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
+                last32Bytes = tempMessageIndexFileHolder.read(32)
+                if remainder != 0:
+                    tempMessageIndexFileHolder.truncate(messageIdxFileSize - remainder)
 
-    #             lastMessageIndex = np.frombuffer(last32Bytes, dtype=np.uint64)
+                lastMessageIndex = np.frombuffer(last32Bytes, dtype=np.uint64)
 
-    #             if lastMessageIndex[0] != validSize // 32 - 1:
-    #                 raise Exception("messageIndexFile is not valid")
-    #             if (
-    #                 lastMessageIndex[1] < lastFrameIndex[0]
-    #                 or lastMessageIndex[0] < lastFrameIndex[3] - 1
-    #             ):
-    #                 raise Exception(
-    #                     "frameIndexFile and messageIndexFile are not consistent"
-    #                 )
-    #             else:
-    #                 if (
-    #                     lastMessageIndex[1] > lastFrameIndex[0]
-    #                     and lastMessageIndex[0] > lastFrameIndex[3]
-    #                 ):  # If the are more messages after the last recorded frames
-    #                     tempMessageIndexFileHolder.truncate(
-    #                         int(lastFrameIndex[3]) * 32
-    #                     )  # Cut message file to the end of last frame's last message
-    #                     tempMessageIndexFileHolder.seek(-32, io.SEEK_END)
-    #                     lastMessageIndex = np.frombuffer(
-    #                         tempMessageIndexFileHolder.read(32), dtype=np.uint64
-    #                     )
-    #                 frameCnt = lastFrameIndex[0] + 1
-    #                 messageCnt = lastMessageIndex[0] + 1
-    #                 byteIndex = int(lastMessageIndex[3] - np.uint64(messageStartByte))
-    #                 sutil.seek(int(lastMessageIndex[3]) - offset + startPos)
-    #                 findContinuePos = True
-    #             if not findContinuePos:
-    #                 tempMessageIndexFileHolder.seek(0)
-    #                 tempMessageIndexFileHolder.truncate(0)
-    #             tempMessageIndexFileHolder.close()
-    #         if not findContinuePos:
-    #             tempFrameIndexFileHolder.seek(0)
-    #             tempFrameIndexFileHolder.truncate(0)
-    #         tempFrameIndexFileHolder.close()
+                if lastMessageIndex[0] != validSize // 32 - 1:
+                    raise Exception("messageIndexFile is not valid")
+                if (
+                    lastMessageIndex[1] < lastFrameIndex[0]
+                    or lastMessageIndex[0] < lastFrameIndex[3] - 1
+                ):
+                    raise Exception(
+                        "frameIndexFile and messageIndexFile are not consistent"
+                    )
+                else:
+                    if (
+                        lastMessageIndex[1] > lastFrameIndex[0]
+                        and lastMessageIndex[0] > lastFrameIndex[3]
+                    ):  # If the are more messages after the last recorded frames
+                        tempMessageIndexFileHolder.truncate(
+                            int(lastFrameIndex[3]) * 32
+                        )  # Cut message file to the end of last frame's last message
+                        tempMessageIndexFileHolder.seek(-32, io.SEEK_END)
+                        lastMessageIndex = np.frombuffer(
+                            tempMessageIndexFileHolder.read(32), dtype=np.uint64
+                        )
+                    frameCnt = lastFrameIndex[0] + 1
+                    messageCnt = lastMessageIndex[0] + 1
+                    byteIndex = int(lastMessageIndex[3] - np.uint64(messageStartByte))
+                    sutil.seek(int(lastMessageIndex[3]) - offset + startPos)
+                    findContinuePos = True
+                if not findContinuePos:
+                    tempMessageIndexFileHolder.seek(0)
+                    tempMessageIndexFileHolder.truncate(0)
+                tempMessageIndexFileHolder.close()
+            if not findContinuePos:
+                tempFrameIndexFileHolder.seek(0)
+                tempFrameIndexFileHolder.truncate(0)
+            tempFrameIndexFileHolder.close()
 
     def evalLarge(self, sutil: StreamUtil, offset: int = 0):
 
@@ -176,6 +171,7 @@ class UncompressedChunk(Chunk):
 
             tempFrameIndexFileHolder.seek(-32 - remainder, io.SEEK_END)
             last32Bytes = tempFrameIndexFileHolder.read(32)
+            FA = FrameAccessor(self.log)
             if remainder != 0:
                 tempFrameIndexFileHolder.truncate(frameIdxFileSize - remainder)
 

@@ -1,11 +1,16 @@
+from email import message
 from typing import Any, List, Optional, Tuple, Type, Union
 
 import numpy as np
 
 from StreamUtils import StreamUtil
+from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBase)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+)
 from ..Message import MessageAccessor, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
@@ -70,6 +75,95 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
     def absMessageIndexEnd(self) -> int:
         return self.frameByteIndex[3]
 
+    # Index file Validation
+    @classmethod
+    def ensureValid(
+        cls,
+        log,
+        indexMap: Optional[IndexMap] = None,
+    ):
+        """
+        Check if the index file is valid, if not, try to fix it
+        If cannot fix, return False, else return True
+        """
+
+        indexFrameFilePath = log.cacheDir / FrameAccessor.idxFileName()
+        indexMessageFilePath = log.cacheDir / MessageAccessor.messageIdxFileName()
+        if not indexFrameFilePath.exists() or not indexMessageFilePath.exists():
+            return False
+
+        tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
+        tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
+
+        frameIndexFileSize = tempFrameIdxFile.getSize()
+        messageIndexFileSize = tempMessageIdxFile.getSize()
+
+        lastFrameIndex = frameIndexFileSize // cls.frameIdxByteLength - 1
+
+        frameTruncatePos = frameIndexFileSize // cls.frameIdxByteLength
+        messageTruncatePos = messageIndexFileSize // cls.messageIdxByteLength
+
+        def updateTruncatePos(newFrameTruncatePos, newMessageTruncatePos):
+            frameTruncatePos = (
+                newFrameTruncatePos
+                if newFrameTruncatePos < frameTruncatePos
+                else frameTruncatePos
+            )
+            messageTruncatePos = (
+                newMessageTruncatePos
+                if newMessageTruncatePos < messageTruncatePos
+                else messageTruncatePos
+            )
+
+        if indexMap is None:
+            indexMap = [lastFrameIndex]
+        if isinstance(indexMap, range):
+            indexMap = list(indexMap)
+
+        indexMap += [lastFrameIndex]  # always check the last frame
+        # for i in indexMap:
+
+        i = 0
+        while True:
+            if i >= len(indexMap):
+                break
+            frameIdx = indexMap[i]
+            if frameIdx < 0:
+                return False  # Didn't find any valid frame
+
+            if frameIdx > lastFrameIndex:
+                continue  # Skip this invalid frame
+
+            startByte = frameIdx * cls.frameIdxByteLength
+            endByte = startByte + cls.frameIdxByteLength
+            frameIndex = cls.decodeIndexBytes(tempFrameIdxFile[startByte:endByte])
+
+            if (
+                frameIndex[0] != frameIdx
+            ):  # This is a big problem, the whole file might be wrong
+                updateTruncatePos()
+                i = 0
+                indexMap = [frameIdx - 1]
+                continue
+            for msgAbsIdx in range(frameIndex[2], frameIndex[3]):
+                if not MessageAccessor.validate(
+                    tempMessageIdxFile, msgAbsIdx, frameIndex[0]
+                ):  # This is a small problem, usually caused by writing interrupted by keyboard
+                    frameTruncatePos = frameIdx
+                    messageTruncatePos = frameIndex[2]
+                    indexMap.append(frameIdx - 1)  # Check the position before it
+                    break
+
+        with open(indexFrameFilePath, "r+b") as f:
+            f.truncate(frameTruncatePos * cls.frameIdxByteLength)
+        with open(indexMessageFilePath, "r+b") as f:
+            f.truncate(messageTruncatePos * cls.messageIdxByteLength)
+        return True
+
+    def verifyMessages(self):
+        for i in range(len(self)):
+            self.children[i].verify()
+
     # Children
     @property
     def children(self) -> Messages:
@@ -91,7 +185,7 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
 
     # Parent
     @property
-    def parent(self) -> LogInterfaceBase:
+    def parent(self) -> LogInterfaceBaseClass:
         if not self.parentIsAssigend:
             self._parent = self.log.getContentChunk()
         return self._parent

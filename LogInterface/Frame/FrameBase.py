@@ -12,11 +12,11 @@ from Utils import dumpJson
 
 from ..Chunk import Chunk
 from ..DataClasses import Timer
-from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceBase
+from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceBaseClass
 from ..Message import MessageAccessor, MessageBase, MessageInstance, Messages
 
 
-class FrameBase(LogInterfaceBase):
+class FrameBase(LogInterfaceBaseClass):
     _threadWithTimestamp: List[str] = [
         "Upper",
         "Lower",

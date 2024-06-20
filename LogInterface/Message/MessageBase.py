@@ -16,10 +16,10 @@ from StreamUtils import StreamUtil
 from Utils import dumpJson
 
 from ..DataClasses import DataClass
-from ..LogInterfaceBase import LogInterfaceBase
+from ..LogInterfaceBase import LogInterfaceBaseClass
 
 
-class MessageBase(LogInterfaceBase):
+class MessageBase(LogInterfaceBaseClass):
     # Core Properties
     @property
     @abstractmethod
