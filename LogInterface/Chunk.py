@@ -11,7 +11,6 @@ class Chunk(LogInterfaceInstanceClass):
         super().__init__(parent)
 
         self._children = []
-        self._logBytes = None
 
     @property
     def chunkMagicNumber(self) -> int:

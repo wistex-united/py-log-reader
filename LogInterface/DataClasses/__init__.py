@@ -4,3 +4,5 @@ from .DataClass import DataClass
 from .FrameBegin import FrameBegin
 from .FrameFinished import FrameFinished
 from .Stopwatch import Stopwatch, Timer
+
+__all__ = ["Annotation", "DataClass", "FrameBegin", "FrameFinished", "Stopwatch", "Timer"]

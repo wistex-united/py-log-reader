@@ -1,4 +1,6 @@
 from email import message
+from enum import Enum
+from importlib import import_module
 from typing import Any, List, Optional, Tuple, Type, Union
 
 import numpy as np
@@ -11,7 +13,7 @@ from ..LogInterfaceBase import (
     LogInterfaceAccessorClass,
     LogInterfaceBaseClass,
 )
-from ..Message import MessageAccessor, Messages
+from ..Message import MessageBase, MessageAccessor, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
 
@@ -30,8 +32,27 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
             np.frombuffer(bytes[24:32], np.uint64)[0],
         )
 
+    @staticmethod
+    def encodeIndexBytes(info: Tuple[int, str, int, int]) -> bytes:
+        absFrameIndex, threadName, frameMessageIndexStart, frameMessageIndexEnd = info
+        return (
+            np.uint32(absFrameIndex).tobytes()
+            + threadName.encode("ascii").ljust(12, b"\0")
+            + np.uint64(frameMessageIndexStart).tobytes()
+            + np.uint64(frameMessageIndexEnd).tobytes()
+        )
+
     def __init__(self, log: Any, indexMap: Optional[IndexMap] = None):
         LogInterfaceAccessorClass.__init__(self, log, indexMap)
+
+    def __getitem__(
+        self, key: Union[int, str, Enum]
+    ) -> Union["FrameAccessor", MessageBase]:
+        if isinstance(key, int):
+            self.indexCursor = key
+            return self
+        else:
+            return super().__getitem__(key)
 
     # Core
     @property
@@ -75,91 +96,6 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
     def absMessageIndexEnd(self) -> int:
         return self.frameByteIndex[3]
 
-    # Index file Validation
-    @classmethod
-    def ensureValid(
-        cls,
-        log,
-        indexMap: Optional[IndexMap] = None,
-    ):
-        """
-        Check if the index file is valid, if not, try to fix it
-        If cannot fix, return False, else return True
-        """
-
-        indexFrameFilePath = log.cacheDir / FrameAccessor.idxFileName()
-        indexMessageFilePath = log.cacheDir / MessageAccessor.messageIdxFileName()
-        if not indexFrameFilePath.exists() or not indexMessageFilePath.exists():
-            return False
-
-        tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
-        tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
-
-        frameIndexFileSize = tempFrameIdxFile.getSize()
-        messageIndexFileSize = tempMessageIdxFile.getSize()
-
-        lastFrameIndex = frameIndexFileSize // cls.frameIdxByteLength - 1
-
-        frameTruncatePos = frameIndexFileSize // cls.frameIdxByteLength
-        messageTruncatePos = messageIndexFileSize // cls.messageIdxByteLength
-
-        def updateTruncatePos(newFrameTruncatePos, newMessageTruncatePos):
-            frameTruncatePos = (
-                newFrameTruncatePos
-                if newFrameTruncatePos < frameTruncatePos
-                else frameTruncatePos
-            )
-            messageTruncatePos = (
-                newMessageTruncatePos
-                if newMessageTruncatePos < messageTruncatePos
-                else messageTruncatePos
-            )
-
-        if indexMap is None:
-            indexMap = [lastFrameIndex]
-        if isinstance(indexMap, range):
-            indexMap = list(indexMap)
-
-        indexMap += [lastFrameIndex]  # always check the last frame
-        # for i in indexMap:
-
-        i = 0
-        while True:
-            if i >= len(indexMap):
-                break
-            frameIdx = indexMap[i]
-            if frameIdx < 0:
-                return False  # Didn't find any valid frame
-
-            if frameIdx > lastFrameIndex:
-                continue  # Skip this invalid frame
-
-            startByte = frameIdx * cls.frameIdxByteLength
-            endByte = startByte + cls.frameIdxByteLength
-            frameIndex = cls.decodeIndexBytes(tempFrameIdxFile[startByte:endByte])
-
-            if (
-                frameIndex[0] != frameIdx
-            ):  # This is a big problem, the whole file might be wrong
-                updateTruncatePos()
-                i = 0
-                indexMap = [frameIdx - 1]
-                continue
-            for msgAbsIdx in range(frameIndex[2], frameIndex[3]):
-                if not MessageAccessor.validate(
-                    tempMessageIdxFile, msgAbsIdx, frameIndex[0]
-                ):  # This is a small problem, usually caused by writing interrupted by keyboard
-                    frameTruncatePos = frameIdx
-                    messageTruncatePos = frameIndex[2]
-                    indexMap.append(frameIdx - 1)  # Check the position before it
-                    break
-
-        with open(indexFrameFilePath, "r+b") as f:
-            f.truncate(frameTruncatePos * cls.frameIdxByteLength)
-        with open(indexMessageFilePath, "r+b") as f:
-            f.truncate(messageTruncatePos * cls.messageIdxByteLength)
-        return True
-
     def verifyMessages(self):
         for i in range(len(self)):
             self.children[i].verify()
@@ -167,7 +103,7 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
     # Children
     @property
     def children(self) -> Messages:
-        if not hasattr(self, "_children"):
+        if not hasattr(self, "_children") or self._children.frameIndex != self.absIndex:
             self._children = self.getMessageAccessor()
         return self._children
 
@@ -179,8 +115,8 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
         messageAccessor = MessageAccessor(
             self.log, range(self.absMessageIndexStart, self.absMessageIndexEnd)
         )
-        messageAccessor.assignParent(self)
-        messageAccessor.index = index
+        messageAccessor.parent = self
+        messageAccessor.indexCursor = index
         return messageAccessor
 
     # Parent
@@ -190,6 +126,13 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
             self._parent = self.log.getContentChunk()
         return self._parent
 
+    @parent.setter
+    def parent(self, value: LogInterfaceBaseClass):
+        LogInterfaceAccessorClass.parent.fset(self, value)
+        raise NotImplementedError(
+            "Setting parent is not currently supported for FrameAccessor"
+        )
+
     def eval(self, sutil: StreamUtil, offset: int = 0):
         """Accessor is only used to access messages already evaluated, it cannot eval"""
         raise NotImplementedError(
@@ -198,14 +141,14 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
 
     @staticmethod
     def getInstanceClass() -> Type["FrameInstance"]:
-        return FrameInstance
+        return import_module("LogInterface.Frame").FrameInstance
 
     # Tools
     def getInstance(self) -> "FrameInstance":
         reuslt: FrameInstance = LogInterfaceAccessorClass.getInstance(self)  # type: ignore
         reuslt.dummyMessages = []
         if isinstance(self.children, LogInterfaceAccessorClass):
-            reuslt.children = [child.getInstance() for child in self.children]  # type: ignore
+            reuslt.children = [child.getInstance() for child in self.children.copy()]  # type: ignore
         elif isinstance(self.children, list):
             reuslt.children = self.children  # type: ignore
         reuslt.messages = self.messages

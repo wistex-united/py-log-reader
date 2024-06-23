@@ -6,8 +6,7 @@ from Primitive import *
 from StreamUtils import StreamUtil
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (LogInterfaceAccessorClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceInstanceClass
 from .MessageBase import MessageBase
 
 
@@ -157,4 +156,3 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
     @absIndex.setter
     def absIndex(self, value: int):
         raise ValueError("Message Instance's absIndex cannot be set")
-

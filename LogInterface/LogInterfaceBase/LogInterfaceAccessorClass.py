@@ -3,13 +3,14 @@ import functools
 from abc import abstractmethod
 from mmap import mmap
 from pathlib import Path
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from Utils import MemoryMappedFile
 
 from .LogInterfaceBase import IndexMap, LogInterfaceBaseClass
 from .LogInterfaceInstanceClass import LogInterfaceInstanceClass
 
+import pdb
 
 class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     @staticmethod
@@ -34,15 +35,24 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
         self._indexCursor = 0
 
+        # cache
+        self._iterStart_cache = False
+
     def __len__(self):
         return len(self._indexMap)
 
     def __iter__(self):
+        self.indexCursor = 0
+        self._iterStart_cache = True
         return self
 
     def __next__(self):
         try:
-            self.indexCursor += 1  # Will raise IndexError if out of range
+            if self._iterStart_cache:
+                self._iterStart_cache = False
+                self.indexCursor = 0
+            else:
+                self.indexCursor += 1  # Will raise IndexError if out of range
             return self
         except IndexError:
             raise StopIteration
@@ -52,9 +62,47 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         self.indexCursor = index
         return self
 
+    def __getstate__(self):
+        state = {}
+        for key, value in self.__dict__.items():
+            if key.endswith("_cached") or key in ["_log", "_parent", "_idxFile"]:
+                continue
+            state[key] = value
+        state["indexFilePath"] = self.indexFilePath
+        return state
+
+    def __setstate__(self, state: Dict):
+        """
+        TODO: This function relies on its parent's __setstate__ to set _parent
+        """
+        indexFilePath = state.pop("indexFilePath")
+        if not indexFilePath.exists():
+            raise OSError(f"Accessor depends on index file, not found: {indexFilePath}")
+        self._idxFile = MemoryMappedFile(indexFilePath)
+
+        self.__dict__.update(state)
+
+        if hasattr(self, "_children"):
+            for idx in range(len(self._children)):
+                child = self._children[idx]
+                if isinstance(child, LogInterfaceInstanceClass):
+                    child.parent = self
+                elif child.isAccessorClass:
+                    child._log = self
+                    if child.parentIsAssigend:
+                        child.parent = self
+                    else:
+                        child._parent = self
+                    break  # For an accessor, only need to set once
+                else:
+                    pass
+
     # Core
     @property
     def log(self) -> Any:
+        """In some cases, we have to delay the log resolve"""
+        while hasattr(self._log, "parent") and self._log.parent is not None:
+            self._log = self._log.parent
         return self._log
 
     @property
@@ -84,6 +132,11 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
     @staticmethod
     @abstractmethod
+    def encodeIndexBytes(info: Tuple) -> bytes:
+        pass
+
+    @staticmethod
+    @abstractmethod
     def getInstanceClass() -> Type["LogInterfaceInstanceClass"]:
         pass
 
@@ -93,29 +146,43 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
     @indexCursor.setter
     def indexCursor(self, value) -> None:
+        if value < 0:
+            value = len(self._indexMap) + value
         self._indexMap[
             value
         ]  # if out of range, either range or List will raise IndexError
+
         self._indexCursor = value
 
     # Parent and Children
-    def assignParent(self, parent: LogInterfaceBaseClass):
-        self._parent = parent
-        # TODO: update self.indexMap based on parent's absIndex
-        self._parentIsAssigend = True
-
     @property
     def parentIsAssigend(self) -> bool:
         return self._parentIsAssigend
 
     @property
     @abstractmethod
-    def parent(self) -> "LogInterfaceAccessorClass":
+    def parent(self) -> "LogInterfaceBaseClass":
         pass
+
+    @parent.setter
+    @abstractmethod
+    def parent(self, value: "LogInterfaceBaseClass"):
+        self._parent = value
+        self._parentIsAssigend = True
 
     @property
     @abstractmethod
-    def children(self) -> "LogInterfaceAccessorClass":
+    def children(
+        self,
+    ) -> Union["LogInterfaceAccessorClass", List["LogInterfaceInstanceClass"]]:
+        pass
+
+    @children.setter
+    @abstractmethod
+    def children(
+        self,
+        value: Union["LogInterfaceAccessorClass", List["LogInterfaceInstanceClass"]],
+    ):
         pass
 
     # Index File related
@@ -123,18 +190,30 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     def indexFilePath(self) -> Path:
         return self.log.cacheDir / self.idxFileName()
 
-    @abstractmethod
     # index & absIndex
     @property
     def index(self) -> int:
         """
         The index of current item in the parent's children (another LogInterfaceAccessorClass)
         """
-        return self.clacRelativeIndex(self.absIndex, self.parent.children.indexMap)  # type: ignore
+        if isinstance(self.parent.children, LogInterfaceAccessorClass):
+            # if self is self.parent.children:
+            #     return self.indexCursor
+            # else:
+                return self.clacRelativeIndex(self.absIndex, self.parent.children.indexMap)  # type: ignore
+        elif isinstance(self.parent.children, list):
+            return self.clacRelativeIndex(self.absIndex, [child.absIndex for child in self.parent.children])  # type: ignore
+        else:
+            raise ValueError("Invalid parent's children type")
 
     @index.setter
     def index(self, value: int):
-        self.absIndex = self.parent.children.indexMap[value]  # type: ignore
+        if isinstance(self.parent.children, LogInterfaceAccessorClass):
+            self.absIndex = self.parent.children.indexMap[value]  # type: ignore
+        elif isinstance(self.parent.children, list):
+            self.absIndex = self.parent.children[value].asbIndex
+        else:
+            raise ValueError("Invalid parent's children type")
 
     @property
     def absIndex(self) -> int:
@@ -160,7 +239,9 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         result = self.getInstanceClass()(self.parent)
         return result
 
-    def clacRelativeIndex(self, absIndex: int, indexMap: Optional[IndexMap]) -> int:
+    def clacRelativeIndex(
+        self, absIndex: int, indexMap: Optional[IndexMap] = None
+    ) -> int:
         """If IndexMap is a list, it must be sorted"""
 
         if indexMap is None:
@@ -179,3 +260,11 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
                 raise ValueError("absIndex not in indexMap: range")
         else:
             raise ValueError("Invalid index range")
+
+    @property
+    def isInstanceClass(self) -> bool:
+        return False
+
+    @property
+    def isAccessorClass(self) -> bool:
+        return True

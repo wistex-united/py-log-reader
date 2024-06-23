@@ -130,3 +130,13 @@ class LogInterfaceBaseClass(ABC):
         for i in self.children:
             i.freeMem()
 
+
+    @property
+    @abstractmethod
+    def isInstanceClass(self) -> bool:
+        pass
+
+    @property
+    @abstractmethod
+    def isAccessorClass(self) -> bool:
+        pass

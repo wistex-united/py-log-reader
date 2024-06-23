@@ -1,6 +1,6 @@
 import json
 import re
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from numpy.typing import NDArray
 
@@ -101,3 +101,23 @@ def type2ReadInstruction(ctype) -> Tuple[str, int]:
     else:
         instruction = (ctype, 1)
     return instruction
+
+
+def canBeRange(
+    lst: List,
+) -> Tuple[bool, Optional[range]]:
+    if len(lst) < 2:
+        return False, None
+
+    step = lst[1] - lst[0]
+    for i in range(2, len(lst)):
+        if lst[i] - lst[i - 1] != step:
+            return False, None
+
+    return True, range(lst[0], lst[-1] + step, step)
+def countLines(filename):
+    try:
+        with open(filename, 'r') as file:
+            return sum(1 for line in file)
+    except FileNotFoundError:
+        return 0

@@ -31,6 +31,10 @@ class MessageBase(LogInterfaceBaseClass):
     def reprObj(self) -> DataClass:
         pass
 
+    @reprObj.setter
+    @abstractmethod
+    def reprObj(self, value: DataClass):
+        pass
     # Parse bytes
     def parseBytes(self) -> DataClass:
         """@Override: Parse the message body bytes into a representation object, which hold the information of the message"""
@@ -39,8 +43,8 @@ class MessageBase(LogInterfaceBaseClass):
         else:
             sutil = StreamUtil(self.logBytes)
             sutil.seek(self.startByte + 4, io.SEEK_SET)
-            self.reprObject = self.classType.read(sutil)
-        return self.reprObject
+            self.reprObj = self.classType.read(sutil)
+        return self.reprObj
 
     @staticmethod
     def parseBytesWrapper(
@@ -52,8 +56,8 @@ class MessageBase(LogInterfaceBaseClass):
             logFile.fileno(), 0, access=ACCESS_READ
         ) as buf:
             buf.seek(start, io.SEEK_SET)
-            reprObject = read(StreamUtil(buf))
-        return reprObject
+            reprObj = read(StreamUtil(buf))
+        return reprObj
 
     # Derived Properties
     @property
@@ -160,15 +164,15 @@ class MessageBase(LogInterfaceBaseClass):
         pickle.dump(self.reprObj, open(self.reprPicklePath, "wb"))
 
     @staticmethod
-    def dumpReprWrapper(picklePath: Path, reprObject: DataClass):
+    def dumpReprWrapper(picklePath: Path, reprObj: DataClass):
         with open(picklePath, "wb") as f:
-            pickle.dump(reprObject, f)
+            pickle.dump(reprObj, f)
 
     def loadRepr(self) -> bool:
         """Load the representation object from the pickle file, returns whether it has been loaded successfully"""
         if self.hasPickledRepr():
             try:
-                self.reprObject = pickle.load(open(self.reprPicklePath, "rb"))
+                self.reprObj = pickle.load(open(self.reprPicklePath, "rb"))
             except EOFError:
                 return False
             return True

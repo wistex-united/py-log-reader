@@ -1,4 +1,5 @@
-from typing import Any
+from enum import Enum
+from typing import Any, Union
 
 from StreamUtils import StreamUtil
 
@@ -15,6 +16,12 @@ class FrameInstance(FrameBase, LogInterfaceInstanceClass):
 
         # cache
         self._absMessageIndexStart_cached: int
+
+    def __getitem__(self, key: Union[int, str, Enum]) -> FrameBase:
+        if isinstance(key, int):
+            return self.messages[key]
+        else:
+            return super().__getitem__(key)
 
     # Core
     @property

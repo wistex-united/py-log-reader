@@ -1,13 +1,16 @@
+from importlib import import_module
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from Primitive import *
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
+from Utils.GeneralUtils import canBeRange
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
 from ..LogInterfaceBase import (
     IndexMap,
+    LogInterfaceBaseClass,
     LogInterfaceAccessorClass,
     LogInterfaceInstanceClass,
 )
@@ -36,13 +39,23 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             int(parsedBytes[3]),
         )
 
+    @staticmethod
+    def encodeIndexBytes(info: Tuple[int, int, int, int]) -> bytes:
+        absMessageIndex, absFrameIndex, messageStartByte, messageEndByte = info
+        return np.array(
+            [absMessageIndex, absFrameIndex, messageStartByte, messageEndByte],
+            dtype=np.uint64,
+        ).tobytes()
+
     def __init__(self, log: Any, indexMap: Optional[IndexMap] = None):
         LogInterfaceAccessorClass.__init__(self, log, indexMap)
         # cache
         self._reprObj_cached: Dict[int, DataClass] = {}
         self._reprDict_cached: Dict[int, Dict[str, Any]] = {}
 
-    def __getitem__(self, indexOrKey: Union[int, str]) -> Any:
+    def __getitem__(
+        self, indexOrKey: Union[int, str]
+    ) -> Union["MessageAccessor", DataClass, Any]:
         """Two mode, int index can change the Accessor's index; while str index can fetch an attribute from current message repr object"""
         if isinstance(indexOrKey, str):
             result = MessageBase.__getitem__(self, indexOrKey)
@@ -124,67 +137,6 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             return False
         return True
 
-    # # Validation
-    # @classmethod
-    # def ensureValid(
-    #     cls,
-    #     log,
-    #     indexMap: Optional[IndexMap] = None,
-    #     CorrectFrameIndexMap: Optional[IndexMap] = None,
-    # ) -> bool:
-    #     indexFilePath = log.cacheDir / cls.idxFileName()
-    #     if not indexFilePath.exists():
-    #         # print(f"Index file not found: {indexFilePath}")
-    #         return False, 0
-    #     tempIdxFile = MemoryMappedFile(indexFilePath)
-    #     size = tempIdxFile.getSize()
-    #     if size // cls.messageIdxByteLength == 0:
-    #         # Not a single message
-    #         return False, 0
-    #     if size % cls.messageIdxByteLength != 0:  # The index file need to be clipped
-    #         size = size - size % cls.messageIdxByteLength
-    #         with open(indexFilePath, "r+b") as f:
-    #             f.truncate(size)
-    #         tempIdxFile.getData().resize(size)
-
-    #     lastIndex = size // cls.messageIdxByteLength - 1
-    #     # messageAccessor = cls(log)
-
-    #     if indexMap is None:
-    #         indexMap = [lastIndex]
-
-    #     def runValidation():
-    #         for i in indexMap:
-    #             if i > lastIndex:
-    #                 return False, lastIndex
-
-    #             startByte = i * cls.messageIdxByteLength
-    #             endByte = startByte + cls.messageIdxByteLength
-    #             messageIndex = cls.decodeIndexBytes(tempIdxFile[startByte:endByte])
-
-    #             if messageIndex[0] != i:
-    #                 return False, i
-    #             if CorrectFrameIndexMap is not None and i < len(CorrectFrameIndexMap):
-    #                 if messageIndex[1] != CorrectFrameIndexMap[i]:
-    #                     return False, i
-
-    #         return True, -1
-
-    #     validTill = lastIndex
-    #     while True:
-    #         result, breakPos = runValidation()
-    #         if result:
-    #             break
-    #         else:
-    #             if breakPos == 0:
-    #                 validTill = 0
-    #                 break
-    #             validTill = breakPos - 1
-    #             indexMap = [breakPos - 1]  # Check if the prev 1 messages are valid
-    #             CorrectFrameIndexMap = None  # Don't check the frame index
-
-    #     return True, validTill
-
     # Parent
     @property
     def parent(self) -> Union[LogInterfaceAccessorClass, LogInterfaceInstanceClass]:
@@ -194,14 +146,49 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             )  # instantiate a FrameAccessor without any constraints
             self._parent.absIndex = self.frameIndex
 
-        if isinstance(self._parent, LogInterfaceAccessorClass):
+        if self._parent.isAccessorClass:
             if not self.parentIsAssigend:
                 self._parent.absIndex = self.frameIndex
             return self._parent
-        elif isinstance(self._parent, LogInterfaceInstanceClass):  # Must be assigned
+        elif self._parent.isInstanceClass:  # Must be assigned
             return self._parent
         else:
             raise Exception("Invalid parent type")
+
+    @parent.setter
+    def parent(
+        self, parent: Union[LogInterfaceAccessorClass, LogInterfaceInstanceClass]
+    ) -> None:
+        LogInterfaceAccessorClass.parent.fset(self, parent)
+        if not hasattr(parent, "_children") or parent._children is None:
+            # if parent.absIndex != parent._children.frameIndex:
+            #     raise Exception("Parent and children frame index mismatch")
+            # This is a complicated case: it ususally caused by : child find its generated parent mismatch its current frame index
+            if parent.isAccessorClass:
+                self.indexMap = range(
+                    parent.absMessageIndexStart, parent.absMessageIndexEnd
+                )
+            else:
+                raise Exception("What is that?")
+        else:
+            if parent._children.isAccessorClass:
+                self.indexMap = parent._children.indexMap
+            elif parent.children.isInstanceClass:
+                self.indexMap = [child.absIndex for child in parent.children.children]
+                toRange, indexRange = canBeRange(self.indexMap)
+                if toRange:
+                    self.indexMap = indexRange
+            else:
+                raise Exception("Invalid parent type")
+
+    # Children
+    @property
+    def children(self) -> None:
+        raise NotImplementedError("Message doesn't have children")
+
+    @children.setter
+    def children(self, value):
+        raise NotImplementedError("Message doesn't have children")
 
     def eval(self, sutil: StreamUtil, offset: int = 0):
         raise NotImplementedError(
@@ -230,7 +217,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
     @staticmethod
     def getInstanceClass() -> Type["MessageInstance"]:
-        return MessageInstance
+        return import_module("LogInterface.Message").MessageInstance
 
     def getInstance(self) -> MessageInstance:
         result: MessageInstance = LogInterfaceAccessorClass.getInstance(self)  # type: ignore

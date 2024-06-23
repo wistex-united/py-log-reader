@@ -234,7 +234,11 @@ class Log(LogInterfaceInstanceClass):
 
     @property
     def outputDir(self):
-        return Path(self.logFilePath).parent / Path(self.logFilePath).stem
+        return (
+            Path(self.logFilePath).parent
+            / "LogReaderOutputs"
+            / Path(self.logFilePath).stem
+        )
 
     @property
     def imageDir(self):

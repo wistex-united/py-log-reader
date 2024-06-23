@@ -1,5 +1,6 @@
 import os
 import pickle
+import types
 from typing import Any, List, Union
 
 from .LogInterfaceBase import LogInterfaceBaseClass
@@ -24,6 +25,10 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     def parent(self) -> Any:
         return self._parent
 
+    @parent.setter
+    def parent(self, value: Any):
+        self._parent = value
+
     @property
     def startByte(self) -> int:
         return self._startByte
@@ -46,18 +51,6 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
         else:
             return self._index_cached
 
-    # def indexOf(self, child):
-    #     """Return the index of a child in its parent's children list"""
-    #     result = -1
-    #     for i, c in enumerate(self.children):
-    #         if c is child:
-    #             result = i
-    #         else:
-    #             c.index = i
-    #     if result == -1:
-    #         raise ValueError(f"{child} not found in {self.children}'s children")
-    #     return result
-
     @property
     def log(self) -> "Any":
         """Shortcut reference to root interface, result is cached to avoid repeated resolves"""
@@ -65,7 +58,7 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
             ref = self.parent
             if ref is None:
                 return self
-            while ref.parent is not None:
+            while hasattr(ref, "parent") and ref.parent is not None:
                 ref = ref.parent
             self._log_cached = ref
         return self._log_cached
@@ -74,6 +67,7 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     def pickleDump(self):
         print(f"Pickling {self.picklePath}")
         os.makedirs(self.picklePath.parent, exist_ok=True)
+        # FrameAccessor.getInstanceClass()
         pickle.dump(self, open(self.picklePath, "wb"))
         print("finished pickling")
 
@@ -88,9 +82,34 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
             state[key] = value
         return state
 
+    # def __setstate__(self, state) -> None:
+    #     self.__dict__.update(state)
+    #     if hasattr(self, "_children"):
+    #         for idx in range(len(self._children)):
+    #             if isinstance(self._children[idx], LogInterfaceBaseClass):
+    #                 self._children[idx]._parent = self
     def __setstate__(self, state) -> None:
         self.__dict__.update(state)
+
         if hasattr(self, "_children"):
             for idx in range(len(self._children)):
-                if isinstance(self._children[idx], LogInterfaceBaseClass):
-                    self._children[idx]._parent = self
+                child = self._children[idx]
+                if isinstance(child, LogInterfaceInstanceClass):
+                    child.parent = self
+                elif child.isAccessorClass:
+                    child._log = self
+                    if child.parentIsAssigend:
+                        child.parent = self
+                    else:
+                        child._parent = self
+                    break  # For an accessor, only need to set once
+                else:
+                    pass
+
+    @property
+    def isInstanceClass(self) -> bool:
+        return True
+
+    @property
+    def isAccessorClass(self) -> bool:
+        return False

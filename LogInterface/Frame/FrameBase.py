@@ -1,4 +1,5 @@
 import ast
+import csv
 import os
 from abc import abstractmethod
 from enum import Enum
@@ -9,11 +10,12 @@ from PIL import PngImagePlugin
 
 from StreamUtils import StreamUtil
 from Utils import dumpJson
+from Utils.GeneralUtils import countLines
 
 from ..Chunk import Chunk
 from ..DataClasses import Timer
 from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceBaseClass
-from ..Message import MessageAccessor, MessageBase, MessageInstance, Messages
+from ..Message import MessageAccessor, MessageInstance, Messages
 
 
 class FrameBase(LogInterfaceBaseClass):
@@ -34,26 +36,29 @@ class FrameBase(LogInterfaceBaseClass):
         self._threadIndex_cached: int
         self._timestamp_cached: int
         self._timer_cached: Timer
+        self._messageIndex_cached:Dict={}
 
     # Magic functions
     def __str__(self) -> str:
         """Convert the frame object to string"""
         return dumpJson(self.asDict(), indent=self.strIndent)
 
-    def __getitem__(self, key: Union[int, str, Enum]) -> MessageBase:
+    @abstractmethod  # Children class need to implement the int case seperately
+    def __getitem__(self, key: Union[str, Enum]) -> "FrameBase":
         """
         Allow to use [<message idx>/<message name>/<message id enum>] to access a message in the frame
         Special case for "Annotation": There might be multiple Annotations in a frame, so please use frame["Annotations"] or frame.Annotations to get them
         """
-        if isinstance(key, int):
-            return self.messages[key]
-        elif key == "Annotation" or key == self.log.MessageID["idAnnotation"]:  # type: ignore
+        if (self.absIndex, key) in self._messageIndex_cached:
+            return self.messages.copy()[self._messageIndex_cached[(self.absIndex, key)]]
+        
+        if key == "Annotation" or key == self.log.MessageID["idAnnotation"]:
             raise Exception(
                 "There might be multiple Annotations in a frame, please use frame.Annotations to get them"
             )
         elif isinstance(key, str) or isinstance(key, Enum):
             result = None
-            for message in self.messages:
+            for message in self.messages.copy():
                 if (
                     message.className == key
                     if isinstance(key, str)
@@ -64,6 +69,7 @@ class FrameBase(LogInterfaceBaseClass):
             if result is None:
                 raise KeyError(f"Message with key: {key} not found")
             else:
+                self._messageIndex_cached[(self.absIndex, key)] = result.indexCursor
                 return result
         else:
             raise KeyError("Invalid key type")
@@ -141,6 +147,9 @@ class FrameBase(LogInterfaceBaseClass):
     @property
     def classNames(self) -> List[str]:
         """The representation class's name of the messages in this frame"""
+        result = []
+        for message in self.messages.copy():
+            result.append(message.className)
         return [message.className for message in self.messages]
 
     @property
@@ -166,8 +175,16 @@ class FrameBase(LogInterfaceBaseClass):
         """The index of this frame in its thread"""
         if hasattr(self, "_threadIndex_cached"):
             return self._threadIndex_cached
-        for i, c in enumerate(self.log.getContentChunk().thread(self.threadName)):
-            c._threadIndex_cached = i
+        thread = self.log.getContentChunk().thread(self.threadName)
+        if isinstance(thread, LogInterfaceAccessorClass):
+            if thread is self:
+                return self.indexCursor
+            for frame in thread.copy():
+                if frame.absIndex == self.absIndex:
+                    return frame.indexCursor
+        elif isinstance(thread, list):
+            for i, c in enumerate(thread):
+                c._threadIndex_cached = i
         return self._threadIndex_cached
 
     @property
@@ -182,7 +199,7 @@ class FrameBase(LogInterfaceBaseClass):
     def reprsDict(self) -> Dict[str, Dict]:
         """Dict of ClassName: Representation object for all messages in this frame"""
         result = {}
-        for message in self.messages:
+        for message in self.messages.copy():
             result[message.className] = message.reprDict
         return result
 
@@ -281,7 +298,7 @@ class FrameBase(LogInterfaceBaseClass):
     @property
     def hasImage(self) -> bool:
         """Check if this frame contains at least one Image message"""
-        for message in self.messages:
+        for message in self.messages.copy():
             if message.isImage:
                 return True
         return False
@@ -355,7 +372,7 @@ class FrameBase(LogInterfaceBaseClass):
         """LogFileName_RobotNumber_Timestamp_ThreadName_FrameIndexInThread_StartByte_EndByte.json"""
         return (
             Path(self.logFilePath).stem
-            + f"_R{self.log['SettingsChunk'].playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_Bf{self.startByte}_Bt{self.endByte}.json"
+            + f"_R{self.log.SettingsChunk.playerNumber}_T{self.timestamp}_{self.threadName}_{self.threadIndex}_Bf{self.startByte}_Bt{self.endByte}.json"
         )
 
     def saveFrameDict(self, dir=None):
