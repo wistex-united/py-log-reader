@@ -32,6 +32,7 @@ class DataClass:
     strIndent = 2
 
     readInstructions: List[ReadInstruction]
+
     def __init__(self):
         pass
 
@@ -39,17 +40,25 @@ class DataClass:
     def asDict(self) -> Dict[str, Any]:
         pass
 
+    # Magic methods
     def __str__(self):
         result = json.dumps(self.asDict(), indent=self.strIndent, cls=DataClassEncoder)
         return result
-    @classmethod
-    @abstractmethod
-    def read(cls, sutil: StreamUtil) -> "DataClass":
-        pass
-    """Deprecated: Instantiation method on dynamicly generated classes"""
 
     def __getitem__(self, key):
         return getattr(self, key)
+
+    def __contains__(self, key):
+        return key in self.attributeCtype
+
+    @classmethod
+    @abstractmethod
+    def read(cls, sutil: StreamUtil, end: int) -> "DataClass":
+        """Read the instance from byte stream and verify the end position"""
+        pass
+
+    """Deprecated: Instantiation method on dynamicly generated classes"""
+
     # @classmethod
     # def read(cls, sutil: StreamUtil) -> "DataClass":
     #     Instructions = cls.getReadInstructions()
@@ -66,4 +75,3 @@ class DataClass:
     # @abstractmethod
     # def distributeReadResult(cls, result) -> "DataClass":
     #     pass
-

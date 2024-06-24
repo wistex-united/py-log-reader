@@ -22,13 +22,14 @@ class Annotation(DataClass):
         self.annotation: str
 
     @classmethod
-    def read(cls, sutil: StreamUtil):
+    def read(cls, sutil: StreamUtil, end: int):
         instance = cls()
         instance.annotationNumber = sutil.readUInt()
         if not (instance.annotationNumber & 0x80000000):
             instance.frame = sutil.readUInt()
-        size = sutil.size() - sutil.tell()
-        lex = shlex.shlex(sutil.read(size).decode("ascii"))
+        size = end - sutil.tell()
+        inputBytes = sutil.read(size)
+        lex = shlex.shlex(inputBytes.decode("ascii"))
         lex.whitespace_split = True
         strings = list(lex)
         instance.name = strings.pop(0)

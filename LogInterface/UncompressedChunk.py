@@ -431,57 +431,57 @@ class UncompressedChunk(Chunk):
                     ]
                 )
 
-    def readMessageIndexCsv(self, indexFilePath, logFilePath):
-        # MessageID = self.log.MessageID
-        self._children = []
-        self._threads = {}
-        self._timers = {}
-        with open(indexFilePath, "r") as f:
-            reader = csv.reader(f)
-            # next(reader)
-            frame: FrameInstance = None  # type: ignore
-            for row in reader:
-                if int(row[2]) == 1:  # idFrameBegin
-                    frame = FrameInstance(self)
-                    frame._children = []
-                    frame.dummyMessages = []
+    # def readMessageIndexCsv(self, indexFilePath, logFilePath):
+    #     # MessageID = self.log.MessageID
+    #     self._children = []
+    #     self._threads = {}
+    #     self._timers = {}
+    #     with open(indexFilePath, "r") as f:
+    #         reader = csv.reader(f)
+    #         # next(reader)
+    #         frame: FrameInstance = None  # type: ignore
+    #         for row in reader:
+    #             if int(row[2]) == 1:  # idFrameBegin
+    #                 frame = FrameInstance(self)
+    #                 frame._children = []
+    #                 frame.dummyMessages = []
 
-                message = MessageInstance(frame)
-                message._index_cached = int(row[0])
-                message._logId = UChar(row[2])
-                message._startByte = int(row[3])
-                message._endByte = int(row[4])
+    #             message = MessageInstance(frame)
+    #             message._index_cached = int(row[0])
+    #             message._logId = UChar(row[2])
+    #             message._startByte = int(row[3])
+    #             message._endByte = int(row[4])
 
-                if len(frame.children) != message.index:
-                    raise ValueError
-                frame._children.append(message)  # type: ignore
-                if int(row[2]) == 2:  # idFrameEnd
-                    frame._index_cached = int(row[1])
-                    if len(self.frames) != frame.index:
-                        raise ValueError
-                    frame._startByte = frame.messages[0].startByte
-                    frame._endByte = frame.messages[-1].endByte
+    #             if len(frame.children) != message.index:
+    #                 raise ValueError
+    #             frame._children.append(message)  # type: ignore
+    #             if int(row[2]) == 2:  # idFrameEnd
+    #                 frame._index_cached = int(row[1])
+    #                 if len(self.frames) != frame.index:
+    #                     raise ValueError
+    #                 frame._startByte = frame.messages[0].startByte
+    #                 frame._endByte = frame.messages[-1].endByte
 
-                    self._children.append(frame)
-                    with open(logFilePath, "rb") as logFile:
-                        nameStartByte = frame.messages[-1].startByte + 4 + 4
-                        nameEndByte = frame.messages[-1].endByte
-                        logFile.seek(nameStartByte)
-                        threadName = logFile.read(nameEndByte - nameStartByte).decode()
-                    if threadName not in self._threads:
-                        self._threads[threadName] = []
-                        self._timers[threadName] = Timer()
-                    self._threads[threadName].append(frame)  # type: ignore
+    #                 self._children.append(frame)
+    #                 with open(logFilePath, "rb") as logFile:
+    #                     nameStartByte = frame.messages[-1].startByte + 4 + 4
+    #                     nameEndByte = frame.messages[-1].endByte
+    #                     logFile.seek(nameStartByte)
+    #                     threadName = logFile.read(nameEndByte - nameStartByte).decode()
+    #                 if threadName not in self._threads:
+    #                     self._threads[threadName] = []
+    #                     self._timers[threadName] = Timer()
+    #                 self._threads[threadName].append(frame)  # type: ignore
 
-        for threadName, threadFrames in self._threads.items():
-            self._timers[threadName].initStorage(
-                [frame.index for frame in threadFrames]
-            )
-        if len(self.frames) == 0:
-            raise ValueError
+    #     for threadName, threadFrames in self._threads.items():
+    #         self._timers[threadName].initStorage(
+    #             [frame.index for frame in threadFrames]
+    #         )
+    #     if len(self.frames) == 0:
+    #         raise ValueError
 
-        self._startByte = self.frames[0].startByte
-        self._endByte = self.frames[-1].endByte
+    #     self._startByte = self.frames[0].startByte
+    #     self._endByte = self.frames[-1].endByte
 
     # def __getstate__(self):
     #     states=super().__getstate__()
@@ -491,7 +491,7 @@ class UncompressedChunk(Chunk):
     def __setstate__(self, state):
         super().__setstate__(state)
         if hasattr(self, "_threads"):
-            for threadName,threadFrameAccessor in self._threads.items():
+            for threadName, threadFrameAccessor in self._threads.items():
                 threadFrameAccessor._parent = self
                 threadFrameAccessor._log = self
 
@@ -512,6 +512,7 @@ class UncompressedChunk(Chunk):
             self._messages_cached = self.log.getMessageAccessor()
         else:
             # Danger Zone, poor performace
+            raise Exception("Danger Zone, poor performace")
             for frame in self.frames:
                 if frame.children.isAccessorClass:
                     for message in frame.children:
@@ -519,16 +520,6 @@ class UncompressedChunk(Chunk):
                 else:  # Instance class
                     self._messages_cached.extend(frame.messages)  # type: ignore
         return self._messages_cached
-
-    @property
-    def reprs(self) -> List[DataClass]:
-        if hasattr(self, "_reprs_cached"):
-            return self._reprs_cached
-        self._reprs_cached = []
-        for frame in self.frames:
-            for message in frame.messages:
-                self._reprs_cached.append(message.reprObj)
-        return self._reprs_cached
 
     def thread(self, name: str) -> Frames:
         return self._threads[name]

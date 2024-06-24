@@ -10,6 +10,7 @@ from Utils import MemoryMappedFile
 
 from ..LogInterfaceBase import (
     IndexMap,
+    LogInterfaceInstanceClass,
     LogInterfaceAccessorClass,
     LogInterfaceBaseClass,
 )
@@ -112,44 +113,63 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
         self._children = value
 
     def getMessageAccessor(self, index: int = 0) -> MessageAccessor:
-        messageAccessor = MessageAccessor(
-            self.log, range(self.absMessageIndexStart, self.absMessageIndexEnd)
+        messageAccessor = self.log.getMessageAccessor(
+            range(self.absMessageIndexStart, self.absMessageIndexEnd)
         )
-        messageAccessor.parent = self
-        messageAccessor.indexCursor = index
+        messageAccessor.parent = self  # Actually not needed, just ensure it works fine
+        messageAccessor.index = index
         return messageAccessor
 
     # Parent
     @property
-    def parent(self) -> LogInterfaceBaseClass:
-        if not self.parentIsAssigend:
-            self._parent = self.log.getContentChunk()
-        return self._parent
+    def parent(self) -> LogInterfaceInstanceClass:
+        return self.log.getContentChunk()
 
     @parent.setter
     def parent(self, value: LogInterfaceBaseClass):
-        LogInterfaceAccessorClass.parent.fset(self, value)
-        raise NotImplementedError(
-            "Setting parent is not currently supported for FrameAccessor"
-        )
+        valueClassName=value.__class__.__name__
+        if valueClassName=="UncompressedChunk" or valueClassName=="CompressedChunk":
+            return 
+        else:
+            raise ValueError(f"Invalid parent type: {valueClassName}")
 
     def eval(self, sutil: StreamUtil, offset: int = 0):
-        """Accessor is only used to access messages already evaluated, it cannot eval"""
+        """Accessor is only used to access messages already evaluated, it cannot eval to instance"""
         raise NotImplementedError(
-            "Accessor is only used to access messages already evaluated, it cannot eval"
+            "Accessor is only used to access messages already evaluated, it cannot eval to instance"
         )
+
+    def evalNext(self, sutil: StreamUtil, offset: int = 0):
+        """
+        This function will try to continue eval the next frame, start from the last index of indexMap
+        if the target index <= mmap index file length, it will write to index file
+        if the target index > mmap index file length, it will open the index file and append the new index
+
+        offset is the start byte of stuil (so sutil can start from any position of the log file)
+        stuil is a stream of logfile
+
+        this would also update the indexMap (append the new index)
+            from range, update, the range, for List, add new index to list
+        also the indexCursor after the indexMap is updated
+        """
+        raise NotImplementedError("Not Implemented yet")
 
     @staticmethod
     def getInstanceClass() -> Type["FrameInstance"]:
-        return import_module("LogInterface.Frame").FrameInstance
+        return import_module(
+            "LogInterface.Frame"
+        ).FrameInstance  # Static import would cause loop import
 
     # Tools
     def getInstance(self) -> "FrameInstance":
-        reuslt: FrameInstance = LogInterfaceAccessorClass.getInstance(self)  # type: ignore
-        reuslt.dummyMessages = []
-        if isinstance(self.children, LogInterfaceAccessorClass):
-            reuslt.children = [child.getInstance() for child in self.children.copy()]  # type: ignore
-        elif isinstance(self.children, list):
-            reuslt.children = self.children  # type: ignore
-        reuslt.messages = self.messages
-        return reuslt
+        raise NotImplementedError(
+            "TODO: Not Implemented yet, directly get the instance from log with abs index"
+        )
+        # reuslt: FrameInstance = LogInterfaceAccessorClass.getInstance(self)  # type: ignore
+        # reuslt.dummyMessages = []
+        # if isinstance(self.children, LogInterfaceAccessorClass):
+        #     reuslt.children = [child.getInstance() for child in self.children]  # type: ignore
+        # elif isinstance(self.children, list):
+        #     reuslt.children = self.children  # type: ignore
+        # reuslt.messages = self.messages
+        # return reuslt

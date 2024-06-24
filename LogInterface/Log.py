@@ -1,10 +1,11 @@
+from collections import OrderedDict
 import csv
 import io
 import os
 from enum import Enum, auto
 from mmap import mmap
 from pathlib import Path
-from typing import Any, List, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from numpy.typing import NDArray
 
@@ -14,9 +15,14 @@ from Utils import MemoryMappedFile
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
-from .Frame import FrameAccessor, Frames
-from .LogInterfaceBase import LogInterfaceInstanceClass
-from .Message import MessageAccessor, Messages
+from .Frame import FrameBase, FrameInstance, FrameAccessor, Frames
+from .LogInterfaceBase import (
+    LogInterfaceBaseClass,
+    LogInterfaceAccessorClass,
+    LogInterfaceInstanceClass,
+    IndexMap,
+)
+from .Message import MessageBase, MessageInstance, MessageAccessor, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
@@ -225,10 +231,6 @@ class Log(LogInterfaceInstanceClass):
         return self.UncompressedChunk.messages
 
     @property
-    def reprs(self) -> List[DataClass]:
-        return self.UncompressedChunk.reprs
-
-    @property
     def children(self) -> List[Chunk]:
         return self._children
 
@@ -248,11 +250,91 @@ class Log(LogInterfaceInstanceClass):
     def frameDir(self):
         return self.outputDir / f"{Path(self.logFilePath).stem}_frames"
 
-    def getMessageAccessor(self) -> MessageAccessor:
-        return MessageAccessor(self)
+    def writeCacheInfo(self, type, name: str, absIndex: int, value):
+        if not hasattr(self, "_Info_cached") or self._Info_cached is None:
+            self._Info_cached = {}
+        if type not in self._Info_cached:
+            self._Info_cached[type] = {}
+        if name not in self._Info_cached[type]:
+            self._Info_cached[type][name] = OrderedDict({absIndex: value})
+        else:
+            if absIndex not in self._Info_cached[type][name]:
+                self._Info_cached[type][name][absIndex] = value
+            else:
+                self._Info_cached[type][name].pop(absIndex)  # remove the old one
+                self._Info_cached[type][name][absIndex] = [value]
+        if len(self._Info_cached[type][name]) > 100:
+            self._Info_cached[type][name].popitem(last=False)
 
-    def getFrameAccessor(self) -> FrameAccessor:
-        return FrameAccessor(self)
+    def cacheInfo(self, obj, name: str, value):
+        if isinstance(obj, LogInterfaceAccessorClass):
+            if isinstance(obj, FrameBase):
+                type = "Frame"
+            elif isinstance(obj, MessageBase):
+                type = "Message"
+            else:
+                raise ValueError
+        else:
+            raise ValueError
+        absIndex = obj.absIndex
+        
+        self.writeCacheInfo(type, name, absIndex, value)
+
+    def getCachedInfo(self, obj, name: str):
+        if isinstance(obj, LogInterfaceAccessorClass):
+            if isinstance(obj, FrameBase):
+                type = "Frame"
+            elif isinstance(obj, MessageBase):
+                type = "Message"
+            else:
+                raise ValueError
+        else:
+            raise ValueError
+        absIndex = obj.absIndex
+
+        if not hasattr(self, "_Info_cached") or self._Info_cached is None:
+            self._Info_cached = {}
+        if type not in self._Info_cached:
+            return None
+        if name not in self._Info_cached[type]:
+            return None
+        if absIndex not in self._Info_cached[type][name]:
+            return None
+        return self._Info_cached[type][name][absIndex]
+
+    def getMessageAccessor(
+        self, indexMap: Optional[IndexMap] = None
+    ) -> MessageAccessor:
+        return MessageAccessor(self, indexMap)
+
+    def getFrameAccessor(self, indexMap: Optional[IndexMap] = None) -> FrameAccessor:
+        return FrameAccessor(self, indexMap)
+
+    def getAccessorCopyOf(
+        self, source: LogInterfaceBaseClass
+    ) -> LogInterfaceAccessorClass:
+        if isinstance(source, FrameBase):
+            if isinstance(source, FrameAccessor):
+                result = self.getFrameAccessor(source.indexMap)
+            elif isinstance(source, FrameInstance):
+                result = self.getFrameAccessor()
+            else:
+                raise NotImplementedError
+            result.absIndex = source.absIndex
+            return result
+        elif isinstance(source, MessageBase):
+            if isinstance(source, MessageAccessor):
+                result = self.getMessageAccessor(source.indexMap)
+            elif isinstance(source, MessageInstance):
+                frameHelper = self.getFrameAccessor()
+                frameHelper.absIndex = source.frameIndex
+                result = frameHelper.getMessageAccessor()
+            else:
+                raise NotImplementedError
+            result.absIndex = source.absIndex
+            return result
+        else:
+            raise NotImplementedError
 
     def getContentChunk(self) -> UChunk:
         # TODO: after implementing CompressedChunk, check this to return the true content Chunk

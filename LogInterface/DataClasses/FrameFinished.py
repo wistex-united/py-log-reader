@@ -13,8 +13,7 @@ class FrameFinished(DataClass):
         self.threadName: str
 
     @classmethod
-    def read(cls, stream: StreamAble):
-        sutil = StreamUtil(stream)
+    def read(cls, sutil: StreamUtil, end: int):
         instance = cls()
         setattr(instance, "threadName", sutil.readPrimitives(str))
         return instance

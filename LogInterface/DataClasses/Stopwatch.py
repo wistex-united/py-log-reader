@@ -26,6 +26,7 @@ class Stopwatch(DataClass):
     def read(
         cls,
         sutil: StreamUtil,
+        end: int,
         justReadNames=False,
     ) -> "Stopwatch":
         instance = Stopwatch()

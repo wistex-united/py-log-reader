@@ -5,7 +5,8 @@ from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Union
-
+import numpy as np
+from numpy.typing import NDArray
 from PIL import PngImagePlugin
 
 from StreamUtils import StreamUtil
@@ -28,6 +29,9 @@ class FrameBase(LogInterfaceBaseClass):
     ]
     """These threads has the FrameInfo module that reports the time stamp of the frame, Referee do not have such module"""
 
+    _timestamps_cache: List[int]
+    # _timestamps_cache: NDArray[np.uint32]
+
     def __init__(self, chunk: Chunk):
         super().__init__()
         self._children: Messages
@@ -36,12 +40,20 @@ class FrameBase(LogInterfaceBaseClass):
         self._threadIndex_cached: int
         self._timestamp_cached: int
         self._timer_cached: Timer
-        self._messageIndex_cached:Dict={}
 
     # Magic functions
     def __str__(self) -> str:
         """Convert the frame object to string"""
         return dumpJson(self.asDict(), indent=self.strIndent)
+
+    def __contains__(self, key: Union[str, Enum]) -> bool:
+        for message in self.messages:
+            if (
+                message.className == key
+                if isinstance(key, str)
+                else message.id == key.value
+            ):
+                return True
 
     @abstractmethod  # Children class need to implement the int case seperately
     def __getitem__(self, key: Union[str, Enum]) -> "FrameBase":
@@ -49,16 +61,17 @@ class FrameBase(LogInterfaceBaseClass):
         Allow to use [<message idx>/<message name>/<message id enum>] to access a message in the frame
         Special case for "Annotation": There might be multiple Annotations in a frame, so please use frame["Annotations"] or frame.Annotations to get them
         """
-        if (self.absIndex, key) in self._messageIndex_cached:
-            return self.messages.copy()[self._messageIndex_cached[(self.absIndex, key)]]
-        
+        result = self.log.getCachedInfo(self, key)
+        if result is not None:
+            return result
+
         if key == "Annotation" or key == self.log.MessageID["idAnnotation"]:
             raise Exception(
                 "There might be multiple Annotations in a frame, please use frame.Annotations to get them"
             )
         elif isinstance(key, str) or isinstance(key, Enum):
             result = None
-            for message in self.messages.copy():
+            for message in self.messages:
                 if (
                     message.className == key
                     if isinstance(key, str)
@@ -69,7 +82,7 @@ class FrameBase(LogInterfaceBaseClass):
             if result is None:
                 raise KeyError(f"Message with key: {key} not found")
             else:
-                self._messageIndex_cached[(self.absIndex, key)] = result.indexCursor
+                self.log.cacheInfo(self, key, result)
                 return result
         else:
             raise KeyError("Invalid key type")
@@ -119,9 +132,13 @@ class FrameBase(LogInterfaceBaseClass):
         if isinstance(self.children, LogInterfaceAccessorClass):
             annotationMap: list[int] = []
             for message in self.messages:
+                print(message.indexCursor)
+                print(message._iterStart_cache)
                 if message.className == "Annotation":
                     annotationMap.append(message.absIndex)
             result: MessageAccessor = self.children.copy()  # type: ignore
+            if len(annotationMap) == 0:
+                return []
             result.indexMap = annotationMap  # type: ignore
             return result
         elif isinstance(self.children, list):
@@ -147,10 +164,15 @@ class FrameBase(LogInterfaceBaseClass):
     @property
     def classNames(self) -> List[str]:
         """The representation class's name of the messages in this frame"""
-        result = []
-        for message in self.messages.copy():
-            result.append(message.className)
-        return [message.className for message in self.messages]
+        result = self.log.getCachedInfo(self, "classNames")
+        if result is not None:
+            pass
+        else:
+            result = []
+            for message in self.messages:
+                result.append(message.className)
+            self.log.cacheInfo(self, "classNames", result)
+        return result
 
     @property
     def numMessages(self) -> int:
@@ -179,7 +201,7 @@ class FrameBase(LogInterfaceBaseClass):
         if isinstance(thread, LogInterfaceAccessorClass):
             if thread is self:
                 return self.indexCursor
-            for frame in thread.copy():
+            for frame in thread:
                 if frame.absIndex == self.absIndex:
                     return frame.indexCursor
         elif isinstance(thread, list):
@@ -199,7 +221,7 @@ class FrameBase(LogInterfaceBaseClass):
     def reprsDict(self) -> Dict[str, Dict]:
         """Dict of ClassName: Representation object for all messages in this frame"""
         result = {}
-        for message in self.messages.copy():
+        for message in self.messages:
             result[message.className] = message.reprDict
         return result
 
@@ -229,10 +251,23 @@ class FrameBase(LogInterfaceBaseClass):
         """
         The time stamp of this frame, if it doesn't have a timestamp, use the timestamp of closest frame that has one
         """
-        if hasattr(self, "_timestamp_cached"):
-            return self._timestamp_cached
-        if "FrameInfo" in self.classNames and "time" in self["FrameInfo"].reprDict:
-            self._timestamp_cached = self["FrameInfo"]["time"]
+
+        if (
+            not hasattr(FrameBase, "_timestamps_cache")
+            or FrameBase._timestamps_cache is None
+        ):
+            setattr(FrameBase, "_timestamps_cache", [0] * len(self.parent.children))
+        elif len(self._timestamps_cache) != len(self.parent.children):
+            self._timestamps_cache.extend(
+                [0] * (len(self.parent.children) - len(self._timestamps_cache))
+            )
+
+        if self._timestamps_cache[self.absIndex] != 0:
+            return self._timestamps_cache[self.absIndex]
+
+        if "FrameInfo" in self and "time" in self["FrameInfo"]:
+            self._timestamps_cache[self.absIndex] = self["FrameInfo"]["time"]
+            return self._timestamps_cache[self.absIndex]
         else:
             # Fake a reasonable timestamp
             sign = -1
@@ -240,19 +275,16 @@ class FrameBase(LogInterfaceBaseClass):
             found = False
             rangeOfIndex = range(len(self.parent.children))
             while (
-                self.index + distance in rangeOfIndex
-                or self.index - distance in rangeOfIndex
+                self.absIndex + distance in rangeOfIndex
+                or self.absIndex - distance in rangeOfIndex
             ):
-                if self.index + sign * distance in rangeOfIndex:
-                    cand = self.parent.children[self.index + sign * distance]
-                    if (
-                        "FrameInfo" in cand.classNames
-                        and "time" in cand["FrameInfo"].reprDict
-                    ):
+                if self.absIndex + sign * distance in rangeOfIndex:
+                    cand = self.parent.children[self.absIndex + sign * distance]
+                    if "FrameInfo" in cand and "time" in cand["FrameInfo"]:
                         for i in range(distance):
-                            self.parent.children[
-                                self.index + sign * i
-                            ]._timestamp_cached = cand.timestamp - sign * (distance - i)
+                            self._timestamps_cache[self.absIndex + sign * i] = (
+                                cand.timestamp - sign * (distance - i)
+                            )
                         found = True
                         break
                 if sign == 1:
@@ -261,8 +293,59 @@ class FrameBase(LogInterfaceBaseClass):
                     sign = -sign
             if not found:
                 for i in rangeOfIndex:
-                    self.parent.children[i]._timestamp_cached = i
-        return self._timestamp_cached
+                    self._timestamps_cache = range(len(self.parent.children))
+        return self._timestamps_cache[self.absIndex]
+
+    def interpolateAllTimestamps(self):
+        # Fake a reasonable timestamp
+        lastValidTimestamp = -1
+        lastFrameWithoutTimestamp = (
+            -2
+        )  # -1 means no frame without timestamp; -2 no valid timestamp from [0]
+        for i in range(len(self.parent.children)):
+            frame = self.parent.children[i]
+
+            currentFrameHasTimestamp = False
+            if self._timestamps_cache[frame.absIndex] != 0:
+                timestamp = self._timestamps_cache[frame.absIndex]
+                currentFrameHasTimestamp = True
+            elif "FrameInfo" in frame and "time" in frame["FrameInfo"]:
+                timestamp = frame["FrameInfo"]["time"]
+                currentFrameHasTimestamp = True
+
+            if currentFrameHasTimestamp:
+                if lastFrameWithoutTimestamp != -1:
+                    pass
+                elif lastFrameWithoutTimestamp == -2:
+                    for j in range(lastFrameWithoutTimestamp, i):
+                        self._timestamps_cache[j] = timestamp - j
+                else:
+                    for j in range(lastFrameWithoutTimestamp, i):
+                        interpolatedTimestamp = int(
+                            lastValidTimestamp
+                            + (timestamp - lastValidTimestamp)
+                            / (i - lastFrameWithoutTimestamp)
+                            * (j - lastFrameWithoutTimestamp)
+                        )
+                        self._timestamps_cache[j] = interpolatedTimestamp
+            else:
+                if lastFrameWithoutTimestamp == -1:
+                    lastFrameWithoutTimestamp = i
+
+            if currentFrameHasTimestamp:
+                lastValidTimestamp = timestamp
+
+        if lastFrameWithoutTimestamp == -1:
+            pass
+        elif lastFrameWithoutTimestamp == -2:
+            print("Warning: No frame has valid timestamp, frame index is used instead")
+            for i in range(len(self.parent.children)):
+                self._timestamps_cache[i] = i
+        else:
+            for j in range(lastFrameWithoutTimestamp, len(self.parent.children)):
+                self._timestamps_cache[j] = (
+                    lastValidTimestamp + (j - lastFrameWithoutTimestamp) + 1
+                )
 
     @property
     def picklePath(self) -> Path:
@@ -349,7 +432,7 @@ class FrameBase(LogInterfaceBaseClass):
 
         metadata = None
         try:
-            # Try to get metadata in the parent frame
+            # Try to get metadata in the frame
             CameraInfo = self["CameraInfo"]
             CameraMatrix = self["CameraMatrix"]
             ImageCoordinateSystem = self["ImageCoordinateSystem"]

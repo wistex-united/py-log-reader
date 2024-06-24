@@ -57,6 +57,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         self, indexOrKey: Union[int, str]
     ) -> Union["MessageAccessor", DataClass, Any]:
         """Two mode, int index can change the Accessor's index; while str index can fetch an attribute from current message repr object"""
+
         if isinstance(indexOrKey, str):
             result = MessageBase.__getitem__(self, indexOrKey)
         elif isinstance(indexOrKey, int):
@@ -86,7 +87,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             value.frame = self.frame.threadName
         self._reprObj_cached[self.absIndex] = value
         if len(self._reprObj_cached) > self.maxCachedReprObj:
-            self._reprObj_cached.pop(next(iter(self._reprObj_cached)))
+            self._reprObj_cached.popitem(last=False)
 
     # Index file related
     @staticmethod
@@ -139,47 +140,18 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
     # Parent
     @property
-    def parent(self) -> Union[LogInterfaceAccessorClass, LogInterfaceInstanceClass]:
-        if not self.parentIsAssigend:  # Fake a parent
-            self._parent = (
-                self.log.getFrameAccessor()
-            )  # instantiate a FrameAccessor without any constraints
-            self._parent.absIndex = self.frameIndex
-
-        if self._parent.isAccessorClass:
-            if not self.parentIsAssigend:
-                self._parent.absIndex = self.frameIndex
-            return self._parent
-        elif self._parent.isInstanceClass:  # Must be assigned
-            return self._parent
-        else:
-            raise Exception("Invalid parent type")
+    def parent(
+        self,
+    ) -> "LogInterfaceAccessorClass":  # actually it will return a FrameAccessor
+        return self.log.getFrameAccessor()[self.frameIndex]
 
     @parent.setter
     def parent(
         self, parent: Union[LogInterfaceAccessorClass, LogInterfaceInstanceClass]
     ) -> None:
-        LogInterfaceAccessorClass.parent.fset(self, parent)
-        if not hasattr(parent, "_children") or parent._children is None:
-            # if parent.absIndex != parent._children.frameIndex:
-            #     raise Exception("Parent and children frame index mismatch")
-            # This is a complicated case: it ususally caused by : child find its generated parent mismatch its current frame index
-            if parent.isAccessorClass:
-                self.indexMap = range(
-                    parent.absMessageIndexStart, parent.absMessageIndexEnd
-                )
-            else:
-                raise Exception("What is that?")
-        else:
-            if parent._children.isAccessorClass:
-                self.indexMap = parent._children.indexMap
-            elif parent.children.isInstanceClass:
-                self.indexMap = [child.absIndex for child in parent.children.children]
-                toRange, indexRange = canBeRange(self.indexMap)
-                if toRange:
-                    self.indexMap = indexRange
-            else:
-                raise Exception("Invalid parent type")
+        """Just another way to set IndexMap"""
+        # TODO: double check if it is type FrameBase
+        self.indexMap = range(parent.absMessageIndexStart, parent.absMessageIndexEnd)
 
     # Children
     @property

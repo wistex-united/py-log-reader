@@ -130,7 +130,6 @@ class LogInterfaceBaseClass(ABC):
         for i in self.children:
             i.freeMem()
 
-
     @property
     @abstractmethod
     def isInstanceClass(self) -> bool:
@@ -140,3 +139,7 @@ class LogInterfaceBaseClass(ABC):
     @abstractmethod
     def isAccessorClass(self) -> bool:
         pass
+
+    @abstractmethod
+    def freeze(self) -> None:
+        """Freeze the object's absIndex (if it is a iterator, it won't be able to move anymore)"""

@@ -26,7 +26,7 @@ class JPEGImage(ImageBase, DataClass):
         self.size: int
 
     @classmethod
-    def read(cls, sutil: StreamUtil) -> "JPEGImage":
+    def read(cls, sutil: StreamUtil, end: int) -> "JPEGImage":
         jpegImage = JPEGImage()
         width = sutil.readUInt()
         height = sutil.readUInt()

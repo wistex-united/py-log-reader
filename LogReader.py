@@ -2,6 +2,8 @@ import csv
 from pathlib import Path
 from typing import List
 
+import tqdm
+
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
@@ -16,10 +18,10 @@ def main():
     LOG.readLogFile("traj12_formal.log")
     LOG.eval()
     # LOG.parseBytes()
-    # for frame in tqdm.tqdm(LOG.frames):
-    #     frame.saveFrameDict()
-    #     frame.saveImageWithMetaData(slientFail=True)
-    # return
+    for frame in tqdm.tqdm(LOG.frames):
+        frame.saveFrameDict()
+        frame.saveImageWithMetaData(slientFail=True)
+    return
 
     OBS = ObservationJosh("WalkToBall")
     index = 0

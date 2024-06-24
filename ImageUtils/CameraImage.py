@@ -46,7 +46,7 @@ class CameraImage(ImageBase, DataClass):
         raise NotImplementedError("getGrayscale not implemented")
 
     @classmethod
-    def read(cls, sutil: StreamUtil) -> "CameraImage":
+    def read(cls, sutil: StreamUtil,end: int) -> "CameraImage":
         cameraImage = CameraImage()
         width = sutil.readUInt()
         height = sutil.readUInt()

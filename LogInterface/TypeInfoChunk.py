@@ -124,7 +124,7 @@ class TypeInfoChunk(Chunk):
 
             readFunction = [
                 "\t@classmethod",
-                f'\tdef read(cls, sutil: StreamUtil) -> "{sanitizeCName(className)}":',
+                f'\tdef read(cls, sutil: StreamUtil, end: int = -1) -> "{sanitizeCName(className)}":',
                 "\t\tinstance = cls()",
             ]
             for attrName in readOrder:
@@ -147,6 +147,12 @@ class TypeInfoChunk(Chunk):
                     if length != 1:
                         mainComponent = f"[{mainComponent} for _ in range(length)]"
                     readFunction.append(f"\t\tinstance.{attrName} = {mainComponent}")
+            readFunction.extend(
+                [
+                    "\t\tif end != -1 and sutil.tell() != end:",
+                    f'\t\t\traise EOFError("{className} doesn\'t consume all the bytes in the message")',
+                ],
+            )
             readFunction.append(
                 "\t\treturn instance",
             )

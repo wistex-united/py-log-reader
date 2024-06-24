@@ -94,17 +94,13 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
         if hasattr(self, "_children"):
             for idx in range(len(self._children)):
                 child = self._children[idx]
-                if isinstance(child, LogInterfaceInstanceClass):
+                if child.isInstanceClass:
                     child.parent = self
                 elif child.isAccessorClass:
-                    child._log = self
-                    if child.parentIsAssigend:
-                        child.parent = self
-                    else:
-                        child._parent = self
-                    break  # For an accessor, only need to set once
+                    self._children.log = self
+                    break  # Since there's only one accessor, we just need to set it once
                 else:
-                    pass
+                    pass  # Some strange child, it might not have parent field and don't need to be set
 
     @property
     def isInstanceClass(self) -> bool:
@@ -113,3 +109,7 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     @property
     def isAccessorClass(self) -> bool:
         return False
+
+    def freeze(self) -> None:
+        """Currently the instance class is freezed by default"""
+        pass

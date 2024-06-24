@@ -1,3 +1,4 @@
+from enum import Enum
 import functools
 import io
 import os
@@ -35,6 +36,7 @@ class MessageBase(LogInterfaceBaseClass):
     @abstractmethod
     def reprObj(self, value: DataClass):
         pass
+
     # Parse bytes
     def parseBytes(self) -> DataClass:
         """@Override: Parse the message body bytes into a representation object, which hold the information of the message"""
@@ -43,7 +45,8 @@ class MessageBase(LogInterfaceBaseClass):
         else:
             sutil = StreamUtil(self.logBytes)
             sutil.seek(self.startByte + 4, io.SEEK_SET)
-            self.reprObj = self.classType.read(sutil)
+
+            self.reprObj = self.classType.read(sutil, self.endByte)
         return self.reprObj
 
     @staticmethod
@@ -56,7 +59,7 @@ class MessageBase(LogInterfaceBaseClass):
             logFile.fileno(), 0, access=ACCESS_READ
         ) as buf:
             buf.seek(start, io.SEEK_SET)
-            reprObj = read(StreamUtil(buf))
+            reprObj = read(StreamUtil(buf), end)
         return reprObj
 
     # Derived Properties
@@ -133,6 +136,7 @@ class MessageBase(LogInterfaceBaseClass):
         """Type class of the representation object"""
         return self.log.TypeInfoChunk.dataClasses[self.className]
 
+    # Magic functions
     def __str__(self) -> str:
         """Convert the current object to string"""
         result = dumpJson(self.reprDict, self.strIndent)
@@ -144,6 +148,9 @@ class MessageBase(LogInterfaceBaseClass):
             return self.reprObj[key]
         else:
             raise KeyError("Invalid key type")
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.reprObj
 
     # Dump: pickle IO
     @property
@@ -250,4 +257,3 @@ class MessageBase(LogInterfaceBaseClass):
                 return None
             else:
                 raise Exception("Save image failed, message is not an image")
-

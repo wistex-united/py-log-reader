@@ -84,9 +84,9 @@ class StreamUtil:
             return self.stream.size()
         else:
             pos = self.tell()
-            self.seek(0, io.SEEK_END)
+            self.stream.seek(0, io.SEEK_END) # Don't update the pbar
             size = self.tell()
-            self.seek(pos)
+            self.stream.seek(pos) # Don't update the pbar
             return size
 
     def getValue(self) -> bytes:
