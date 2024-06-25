@@ -59,7 +59,7 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
         self._logId = id
 
         self._startByte = offset
-        self._endByte = offset + 4 + size
+        self._endByte = offset + 4 + int(size)
 
     @property
     def logId(self) -> UChar:

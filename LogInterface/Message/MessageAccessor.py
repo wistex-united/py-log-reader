@@ -99,7 +99,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         """The bytes of current index in messageIndexFile, which store the location of the message in the log file"""
         byteIndex = self.absIndex * self.messageIdxByteLength
         return self.getBytesFromMmap(
-            self._idxFile.getData(), byteIndex, byteIndex + self.messageIdxByteLength
+            self.idxFile.getData(), byteIndex, byteIndex + self.messageIdxByteLength
         )
 
     @property

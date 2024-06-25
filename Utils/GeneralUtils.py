@@ -1,4 +1,6 @@
 import json
+import mmap
+import os
 import re
 from typing import List, Optional, Tuple, Union
 
@@ -115,9 +117,71 @@ def canBeRange(
             return False, None
 
     return True, range(lst[0], lst[-1] + step, step)
+
+
 def countLines(filename):
     try:
-        with open(filename, 'r') as file:
+        with open(filename, "r") as file:
             return sum(1 for line in file)
     except FileNotFoundError:
         return 0
+
+
+def readLastLine(csvFilePath):
+    with open(csvFilePath, "r+b") as f:
+        # Memory-map the file, size 0 means whole file
+        mmappedFile = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+        # Find the position of the last newline character
+        mmappedFile.seek(0, 2)  # Move to the end of the file
+        endPos = mmappedFile.tell()
+
+        pos = endPos - 1
+
+        laseLineEndPos = None
+        while pos >= 0:
+            if mmappedFile[pos] == ord(b"\n"):
+                if laseLineEndPos is None:
+                    laseLineEndPos = pos
+                else:
+                    break
+            pos -= 1
+
+        # Read the last line
+        if pos < 0:
+            mmappedFile.seek(0)
+        else:
+            mmappedFile.seek(pos + 1)
+
+        lastLine = mmappedFile.readline().decode()
+
+        if mmappedFile.tell() != laseLineEndPos + 1:
+            mmappedFile.close()
+            raise ValueError("Error reading last line")
+        else:
+            # truncate the file
+            mmappedFile.close()
+            with open(csvFilePath, "r+b") as f:
+                f.seek(laseLineEndPos + 1)
+                f.truncate()
+
+    return lastLine.strip()
+
+
+def extractTrajNumbers(folderPath):
+    if not os.path.exists(folderPath):
+        return []
+    # List all files in the specified folder
+    files = os.listdir(folderPath)
+
+    # Regular expression to match 'traj' files and extract the numbers
+    pattern = re.compile(r"traj_(\d+)\.npz")
+
+    # Extract numbers from the filenames
+    numbers = []
+    for file in files:
+        match = pattern.match(file)
+        if match:
+            numbers.append(int(match.group(1)))
+
+    return sorted(numbers)

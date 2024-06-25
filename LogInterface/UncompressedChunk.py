@@ -55,7 +55,6 @@ class UncompressedChunk(Chunk):
             frameIdxFilePath.unlink()
 
     def evalLarge(self, sutil: StreamUtil, offset: int = 0):
-
         startPos: SutilCursor = sutil.tell()
         chunkMagicBit: UChar = sutil.readUChar()
         if chunkMagicBit != ChunkEnum.UncompressedChunk.value:
@@ -85,15 +84,18 @@ class UncompressedChunk(Chunk):
         if not UncompressedChunk.ensureIndexFilesValid(self.log):
             self.clearIndexFiles()
 
-        messageAccessor = MessageAccessor(self.log)
-        lastMessage = messageAccessor[-1]
-        frameAccessor = FrameAccessor(self.log)
-        lastFrame = frameAccessor[-1]
-        # Since this frame accessor's parent is not fully initialized, parent related field should not be used
-        frameCnt = lastFrame.absIndex + 1
-        messageCnt = lastMessage.absIndex + 1
-        byteIndex = lastMessage.endByte - messageStartByte
-        sutil.seek(lastMessage.endByte - offset + startPos)
+        try:
+            messageAccessor = MessageAccessor(self.log)
+            lastMessage = messageAccessor[-1]
+            frameAccessor = FrameAccessor(self.log)
+            lastFrame = frameAccessor[-1]
+            # Since this frame accessor's parent is not fully initialized, parent related field should not be used
+            frameCnt = lastFrame.absIndex + 1
+            messageCnt = lastMessage.absIndex + 1
+            byteIndex = lastMessage.endByte - messageStartByte
+            sutil.seek(lastMessage.endByte - offset + startPos)
+        except OSError:
+            pass
 
         messageIdxFile = open(messageIdxFilePath, "ab")
         frameIdxFile = open(frameIdxFilePath, "ab")
@@ -251,12 +253,101 @@ class UncompressedChunk(Chunk):
                 self.dumpReprs(results, unparsed)
             )
 
+    @classmethod
+    def checkThroughFrameIndex(
+        cls,
+        log,
+        checkFrameRange: Optional[IndexMap] = None,
+    ):
+        indexFrameFilePath = log.cacheDir / FrameAccessor.idxFileName()
+        try:
+            tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
+        except OSError as e:
+            return False
+
+        frameIndexFileSize = tempFrameIdxFile.getSize()
+        lastFrameIndex = frameIndexFileSize // FrameAccessor.frameIdxByteLength - 1
+
+        if isinstance(checkFrameRange, range):
+            checkFrameRange = list(checkFrameRange)
+
+        if checkFrameRange is None:
+            checkFrameRange = range(0, lastFrameIndex + 1)
+        else:
+            checkFrameRange += [lastFrameIndex]
+
+        for frameIdx in tqdm(checkFrameRange, desc="Checking Frame Index"):
+            startByte = frameIdx * FrameAccessor.frameIdxByteLength
+            endByte = startByte + FrameAccessor.frameIdxByteLength
+            frameIndexBytes = tempFrameIdxFile.getData()[startByte:endByte]
+            frameIndex = FrameAccessor.decodeIndexBytes(frameIndexBytes)
+
+            if frameIndex[0] != frameIdx:
+                return False
+            if frameIdx != 0:
+                prevFrameIndex = FrameAccessor.decodeIndexBytes(
+                    tempFrameIdxFile.getData()[
+                        startByte
+                        - FrameAccessor.frameIdxByteLength : endByte
+                        - FrameAccessor.frameIdxByteLength
+                    ]
+                )
+                if frameIndex[2] != prevFrameIndex[3]:
+                    return False
+        return True
+
+    @classmethod
+    def checkThroughMessageIndex(
+        cls,
+        log,
+        checkMessageRange: Optional[IndexMap] = None,
+    ):
+        indexMessageFilePath = log.cacheDir / MessageAccessor.idxFileName()
+        try:
+            tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
+        except OSError as e:
+            return False
+
+        messageIndexFileSize = tempMessageIdxFile.getSize()
+        lastMessageIndex = (
+            messageIndexFileSize // MessageAccessor.messageIdxByteLength - 1
+        )
+
+        if isinstance(checkMessageRange, range):
+            checkMessageRange = list(checkMessageRange)
+
+        if checkMessageRange is None:
+            checkMessageRange = range(0, lastMessageIndex + 1)
+        else:
+            checkMessageRange += [lastMessageIndex]
+
+        for messageIdx in tqdm(checkMessageRange, desc="Checking Message Index"):
+            startByte = messageIdx * MessageAccessor.messageIdxByteLength
+            endByte = startByte + MessageAccessor.messageIdxByteLength
+            messageIndexBytes = tempMessageIdxFile.getData()[startByte:endByte]
+            messageIndex = MessageAccessor.decodeIndexBytes(messageIndexBytes)
+
+            if messageIndex[0] != messageIdx:
+                return False
+            if messageIdx != 0:
+                prevMessageIndex = MessageAccessor.decodeIndexBytes(
+                    tempMessageIdxFile.getData()[
+                        startByte
+                        - MessageAccessor.messageIdxByteLength : endByte
+                        - MessageAccessor.messageIdxByteLength
+                    ]
+                )
+                if messageIndex[2] != prevMessageIndex[3]:
+                    return False
+        return True
+
     # Index file Validation
     @classmethod
     def ensureIndexFilesValid(
         cls,
         log,
         checkFrameRange: Optional[IndexMap] = None,
+        detailedCheck: bool = False,
     ):
         """
         Check if the index file is valid, if not, try to fix it
@@ -267,9 +358,23 @@ class UncompressedChunk(Chunk):
         indexMessageFilePath = log.cacheDir / MessageAccessor.idxFileName()
         if not indexFrameFilePath.exists() or not indexMessageFilePath.exists():
             return False
+        try:
+            tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
+            tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
+        except OSError as e:
+            return False
 
-        tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
-        tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
+        if detailedCheck:
+            checkThroughResult = True
+            checkThroughResult = (
+                cls.checkThroughMessageIndex(log, checkMessageRange=None)
+                and checkThroughResult
+            )
+            checkThroughResult = (
+                cls.checkThroughFrameIndex(log, checkFrameRange=None)
+                and checkThroughResult
+            )
+            print(f"checkThroughResult: {checkThroughResult}")
 
         frameIndexFileSize = tempFrameIdxFile.getSize()
         messageIndexFileSize = tempMessageIdxFile.getSize()

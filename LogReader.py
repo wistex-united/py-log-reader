@@ -1,42 +1,113 @@
 import csv
+import os
 from pathlib import Path
 from typing import List
+import linecache
 
-import tqdm
-
+import tqdm, psutil, tracemalloc
+import tracemalloc
+from pympler import tracker, summary, muppy
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
 from Utils import ObservationJosh
-from Utils.GeneralUtils import countLines
+from Utils import countLines, readLastLine, extractTrajNumbers
+
+
+def start_tracing():
+    tracemalloc.start()
+
+
+def display_top(snapshot, key_type="lineno", limit=10):
+    snapshot = snapshot.filter_traces(
+        (
+            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+            tracemalloc.Filter(False, "<unknown>"),
+        )
+    )
+    top_stats = snapshot.statistics(key_type)
+
+    print(f"Top {limit} lines")
+    for index, stat in enumerate(top_stats[:limit], 1):
+        frame = stat.traceback[0]
+        print(f"#{index}: {frame.filename}:{frame.lineno} - {stat.size / 1024:.1f} KiB")
+        line = linecache.getline(frame.filename, frame.lineno).strip()
+        if line:
+            print(f"    {line}")
+
+    other = top_stats[limit:]
+    if other:
+        size = sum(stat.size for stat in other)
+        print(f"{len(other)} other: {size / 1024:.1f} KiB")
+    total = sum(stat.size for stat in top_stats)
+    print(f"Total allocated size: {total / 1024:.1f} KiB")
+
+
+def stop_tracing():
+    snapshot = tracemalloc.take_snapshot()
+    display_top(snapshot)
+
+
+def report_memory_usage():
+    all_objects = muppy.get_objects()
+    sum_objects = summary.summarize(all_objects)
+    summary.print_(sum_objects)
+
+    tr = tracker.SummaryTracker()
+    tr.print_diff()
+
+
+def checkPointCallback(cnt):
+    if cnt % 1000 == 0:
+        print(f"Checkpoint: {cnt}")
+        snapshot = tracemalloc.take_snapshot()
+        display_top(snapshot)
 
 
 def main():
+    start_tracing()
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("traj9_bh.log")
-    LOG.readLogFile("traj12_formal.log")
+    LOG.readLogFile("traj16_formal.log")
     LOG.eval()
     # LOG.parseBytes()
-    for frame in tqdm.tqdm(LOG.frames):
-        frame.saveFrameDict()
-        frame.saveImageWithMetaData(slientFail=True)
-    return
+    # for frame in tqdm.tqdm(LOG.frames):
+    #     frame.saveFrameDict()
+    #     frame.saveImageWithMetaData(slientFail=True)
+    # return
 
     OBS = ObservationJosh("WalkToBall")
     index = 0
 
     collisions = []
     prev_state = None
-    prev_obs = None
+    prevObs = None
     transitions: List[List] = []
 
-    csvLine=countLines(LOG.outputDir / "data.csv")
+    lastCsvFrame = 0
+    lastTrajFrame = 0
+    if LOG.outputDir.exists():
+        csvLine = countLines(LOG.outputDir / "data.csv")
+
+        if csvLine != 0:
+            lastCsvLine = readLastLine(LOG.outputDir / "data.csv").split(",")
+            lastCsvFrame = int(lastCsvLine[0])
+
+        collectedTrajs = extractTrajNumbers(LOG.outputDir)
+        if len(collectedTrajs) != 0:
+            lastTrajFrame = collectedTrajs[-1]
+
+    print(f"Last csv frame: {lastCsvFrame}")
+
+    print(f"Last traj frame: {lastTrajFrame}")
+
+    ContinuePos = min(lastCsvFrame, lastTrajFrame)
+
+    print(f"Continue from {ContinuePos}")
     with open(LOG.outputDir / "data.csv", "a") as f:
         writer = csv.writer(f)
-        if csvLine>1:
-            csvLine-=1
-        else:
+        if csvLine == 0:
             writer.writerow(
                 [
                     "frameIndex",
@@ -57,19 +128,14 @@ def main():
         prevAgentLoc = None
         prevBallLoc = None
 
-        once=True
-        for frame in LOG.UncompressedChunk.threads["Cognition"]:
-            # if frame.indexCursor<:
-            #     for i in range(295296):
-            #         next(frame)
-            #     once=False
-            if frame.hasImage:
-                frame.saveImageWithMetaData()
-                print(f"Frame {frame.index} has image")
+        GAME_STATE = LOG.TypeInfoChunk.enumClasses["GameState::State"]
 
+        for frame in LOG.UncompressedChunk.threads["Cognition"]:
+            if frame.absIndex < ContinuePos:
+                continue
+            checkPointCallback(frame.indexCursor)
             print(f"Frame {frame.indexCursor}")
-            # exit(1)
-            GAME_STATE = LOG.TypeInfoChunk.enumClasses["GameState::State"]
+
             try:
                 gameState = frame["GameState"]
                 playerNumber = gameState["playerNumber"]
@@ -78,33 +144,16 @@ def main():
 
                 if state == GAME_STATE["playing"]:
                     # The observations we use
-                    agentLoc = [
-                        frame["RobotPose"]["translation"].x,
-                        frame["RobotPose"]["translation"].y,
-                        frame["RobotPose"]["rotation"].value,
-                    ]
-                    ballLoc = [
-                        frame["FieldBall"]["positionOnField"].x,
-                        frame["FieldBall"]["positionOnField"].y,
-                    ]
-                    teammate_loc = []
-                    for teammate in frame["GlobalTeammatesModel"]["teammates"]:
-                        teammate_loc.append(
-                            [teammate.pose.translation.x, teammate.pose.translation.y]
-                        )
+                    agentLoc = frame.agentLoc
+                    ballLoc = frame.ballLoc
+                    teammate_loc = frame.teammateLoc
+                    opponent_loc = frame.opponentLoc
+                    # check if all four properties are not None
+                    assert agentLoc is not None
+                    assert ballLoc is not None
+                    # assert teammate_loc is not None
+                    # assert opponent_loc is not None
 
-                    opponent_loc = []
-                    for opponent in frame["GlobalOpponentsModel"]["opponents"]:
-                        # Have to convert to global coordinates
-                        opponent_loc.append(
-                            [
-                                opponent.position.x
-                                + frame["RobotPose"]["translation"].x,
-                                opponent.position.y
-                                + frame["RobotPose"]["translation"].y,
-                            ]
-                        )
-                    
                     obs = OBS.getObservation(agentLoc, ballLoc)
                     prevAgentLoc = agentLoc if prevAgentLoc is None else prevAgentLoc
                     prevBallLoc = ballLoc if prevBallLoc is None else prevBallLoc
@@ -118,66 +167,41 @@ def main():
                         OBS.ballInGoalArea(ballLoc),
                         0,
                     )
-                    # print(frame["MotionRequest"]["kickType"])
-                    # print(frame["MotionRequest"]["kickLength"])
-                    # print(frame["MotionRequest"]["alignPrecisely"])
-                    # print(frame["MotionRequest"]["targetDirection"])
-                    kickLength = frame["MotionRequest"]["kickLength"]
-                    
                     acts = None
-                    # for message in frame.Annotations:
-                    #     if message["name"] == "policy_action":
-                    #         acts = ast.literal_eval(
-                    #             "[" + message["annotation"][1:-1] + "]"
-                    #         )
-                    alignPreciselyModified = 0
-                    if frame["MotionRequest"]["alignPrecisely"].value == 0:
-                        alignPreciselyModified = 1
-                    elif frame["MotionRequest"]["alignPrecisely"].value == 1:
-                        alignPreciselyModified = 0
-                    elif frame["MotionRequest"]["alignPrecisely"].value == 2:
-                        alignPreciselyModified = 0.5
 
                     if acts is None:
                         acts = [
-                            frame["MotionInfo"]["speed"]["translation"].x,
-                            frame["MotionInfo"]["speed"]["translation"].y,
-                            frame["MotionInfo"]["speed"]["rotation"],
-                            frame["MotionRequest"]["kickType"],
-                            kickLength if kickLength < 1e7 else 0,
-                            alignPreciselyModified,
+                            *frame.motionBasics,
+                            *frame.kickBasics,
                             # -7,  # stand
                         ]
-                    
+
                     if acts is None:
                         raise Exception("acts is None")
                     frame.threadIndex
                     prev_state = state
-                    if csvLine>1:
-                        csvLine-=1
-                    else:
-                        writer.writerow(
-                            [
-                                frame.absIndex,
-                                agentLoc,
-                                ballLoc,
-                                *acts,
-                                frame["GameControllerData"]["rollOutResult"],
-                                frame.jsonName,
-                            ]
-                        )
-                    print([
-                            frame.absIndex,
-                            agentLoc,
-                            ballLoc,
-                            *acts,
-                            frame["GameControllerData"]["rollOutResult"],
-                            frame.jsonName,
-                        ])
+
+                    infos = {
+                        "frameIndex": frame.absIndex,
+                        "agentLoc": agentLoc,
+                        "ballLoc": ballLoc,
+                        "robotSpeedX": acts[0],
+                        "robotSpeedY": acts[1],
+                        "robotSpeedRot": acts[2],
+                        "kickType": acts[3],
+                        "kickLength": acts[4],
+                        "alignPreciselyModified": acts[5],
+                        "rollOutResult": frame.rollOutResult,
+                        "jsonFile": frame.jsonName,
+                    }
+                    line = list(infos.values())
+                    if frame.absIndex > lastCsvFrame:
+                        writer.writerow(line)
+                    print(line)
                     # if prev_obs is not None:
                     #     transitions.append([prev_obs, acts, None, obs, False])
-                    transitions.append([obs, acts, None, reward, False])
-                    prev_obs = obs
+                    transitions.append([obs, acts, infos, reward, False])
+                    prevObs = obs
                     OBS.stepObservationHistory(obs)
 
                     # obs, acts, infos, next_obs, dones
@@ -186,19 +210,15 @@ def main():
                         prev_state == GAME_STATE["playing"]
                         and state == GAME_STATE["ownKickOff"]
                     ):
-                        if csvLine>1:
-                            csvLine-=1
-                        else:
+                        if frame.absIndex > lastCsvFrame:
                             writer.writerow(
                                 [
                                     frame.index,
                                     *(["-"] * 8),
-                                    frame["GameControllerData"]["rollOutResult"],
+                                    frame.rollOutResult,
                                     frame.jsonName,
                                 ]
                             )
-                        transitions.pop()  # Remove the last transition that might be wrong
-                        # Set the done flag for the last state
                         last = transitions[-1]
                         last[4] = True
 
@@ -213,22 +233,23 @@ def main():
                             next_obs=next_obs,
                             dones=dones,
                         )
-
-                # elif state == GAME_STATE["ownKickOff"]:
-                #     pass
-                # elif state == GAME_STATE["setupOpponentKickOff"]:
-                #     pass
-                # elif state == GAME_STATE["waitForOpponentKickOff"]:
-                #     pass
-                # elif state == GAME_STATE["opponentKickOff"]:
-                #     pass
-                # elif state == GAME_STATE["opponentGoalKick"]:
-                #     pass
+                        print(f"Saved {LOG.outputDir / f'traj_{frame.absIndex}.npz'}")
                 else:
-                    print(gameState["state"])
+                    raise Exception(f"Unknown state: {state}")
                 prev_state = state
             except KeyError as e:
-                collisions.append((frame.index, frame.classNames, e))
+                collisions.append((frame.absIndex, frame.classNames, e))
+                print(
+                    f"KeyError: {e} at frame {frame.absIndex} with {frame.classNames}"
+                )
+            except AssertionError as e:
+                collisions.append((frame.absIndex, frame.classNames, e))
+                print(
+                    f"AssertionError: {e} at frame {frame.absIndex} with {frame.classNames}"
+                )
+            except Exception as e:
+                print(f"Exception: {e} at frame {frame.absIndex}")
+                raise
 
             # if len(frame.dummyMessages)!=0:
             #     print(1)

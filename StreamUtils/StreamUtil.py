@@ -62,7 +62,7 @@ class StreamUtil:
             raise EOFError("Not enough data to read")
         result = self.stream.read(numBytes)
         self.numReadedBytes += numBytes
-        self._pbar.update(numBytes)
+        self._pbar.update(int(numBytes))
         return result
 
     def tell(self) -> int:
@@ -73,9 +73,9 @@ class StreamUtil:
         origin=self.tell()
         self.stream.seek(offset, whence)
         if whence == io.SEEK_CUR:
-            self._pbar.update(offset)
+            self._pbar.update(int(offset))
         elif whence == io.SEEK_SET:
-            self._pbar.update(offset - origin)
+            self._pbar.update(int(offset - origin))
     def size(self) -> int:
         """Total size of StreamUtil's stream"""
         if isinstance(self.stream, io.BytesIO):

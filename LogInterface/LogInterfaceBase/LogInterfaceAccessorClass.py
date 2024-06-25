@@ -23,10 +23,6 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         super().__init__()
         self._log = log
 
-        indexFilePath = log.cacheDir / self.idxFileName()
-        if not indexFilePath.exists():
-            raise OSError(f"Accessor depends on index file, not found: {indexFilePath}")
-        self._idxFile = MemoryMappedFile(indexFilePath)
         self._frozen = False
 
         self.indexMap = indexMap
@@ -102,7 +98,13 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         while hasattr(self._log, "parent") and self._log.parent is not None:
             self._log = self._log.parent
         return self._log
-
+    @property
+    def idxFile(self) -> MemoryMappedFile:
+        if not hasattr(self, "_idxFile"):
+            if not self.indexFilePath.exists():
+                raise OSError(f"Accessor depends on index file, not found: {self.indexFilePath}")
+            self._idxFile = MemoryMappedFile(self.indexFilePath)
+        return self._idxFile
     @log.setter
     def log(self, value: Any) -> None:
         self._log = value
@@ -119,7 +121,7 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
             initialSet = False
 
         if value is None:
-            self._indexMap = range(self._idxFile.getSize() // self.messageIdxByteLength)
+            self._indexMap = range(self.idxFile.getSize() // self.messageIdxByteLength)
         elif len(value) == 0:
             raise ValueError("Empty index map")
         elif isinstance(value, list):

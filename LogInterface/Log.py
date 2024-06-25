@@ -154,10 +154,17 @@ class Log(LogInterfaceInstanceClass):
             )
         startPos = sutil.tell()
 
+        readed = [False] * len(ChunkEnum)
+        shouldTrucate = False
         while not sutil.atEnd():
             chunkMagicBit = sutil.readUChar()
             sutil.seek(-1, io.SEEK_CUR)
 
+            if chunkMagicBit not in range(len(readed)) or readed[chunkMagicBit] == True:
+                shouldTrucate = True
+                break
+            else:
+                readed[chunkMagicBit] = True
             offset = self._children[-1].endByte if self._children else 0
             match chunkMagicBit:
                 case ChunkEnum.UncompressedChunk.value:
@@ -277,7 +284,7 @@ class Log(LogInterfaceInstanceClass):
         else:
             raise ValueError
         absIndex = obj.absIndex
-        
+
         self.writeCacheInfo(type, name, absIndex, value)
 
     def getCachedInfo(self, obj, name: str):

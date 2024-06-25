@@ -4,7 +4,7 @@ import os
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 from numpy.typing import NDArray
 from PIL import PngImagePlugin
@@ -86,6 +86,105 @@ class FrameBase(LogInterfaceBaseClass):
                 return result
         else:
             raise KeyError("Invalid key type")
+
+    # Common properties
+    @property
+    def agentLoc(self) -> Tuple[float, float, float]:
+        """[x, y, rotation]"""
+        try:
+            agentLoc = (
+                float(self["RobotPose"]["translation"].x),
+                float(self["RobotPose"]["translation"].y),
+                float(self["RobotPose"]["rotation"].value),
+            )
+        except:
+            return None
+        return agentLoc
+
+    @property
+    def ballLoc(self) -> Tuple[float, float]:
+        """[x, y]"""
+        try:
+            ballLoc = (
+                float(self["FieldBall"]["positionOnField"].x),
+                float(self["FieldBall"]["positionOnField"].y),
+            )
+        except:
+            return None
+        return ballLoc
+
+    @property
+    def teammateLoc(self) -> List[Tuple[float, float]]:
+        """[[x, y],...]"""
+        try:
+            teammateLoc = []
+            for teammate in self["GlobalTeammatesModel"]["teammates"]:
+                teammateLoc.append(
+                    (
+                        float(teammate.pose.translation.x),
+                        float(teammate.pose.translation.y),
+                    )
+                )
+        except:
+            return None
+        return teammateLoc
+
+    @property
+    def opponentLoc(self) -> List[Tuple[float, float]]:
+        """[[x, y],...]"""
+        try:
+            opponentLoc = []
+            for opponent in self["GlobalOpponentsModel"]["opponents"]:
+                # Have to convert to global coordinates
+                opponentLoc.append(
+                    (
+                        float(opponent.position.x + self["RobotPose"]["translation"].x),
+                        float(opponent.position.y + self["RobotPose"]["translation"].y),
+                    )
+                )
+        except:
+            return None
+        return opponentLoc
+
+    @property
+    def motionBasics(self) -> Tuple[float, float, float]:
+        """[speed_x, speed_y, rotation]"""
+        try:
+            motionBasics = (
+                float(self["MotionInfo"]["speed"]["translation"].x),
+                float(self["MotionInfo"]["speed"]["translation"].y),
+                float(self["MotionInfo"]["speed"]["rotation"].value),
+            )
+        except:
+            return None
+        return motionBasics
+
+    @property
+    def kickBasics(self) -> Tuple[float, float, float]:
+        try:
+            alignPreciselyModified = 0
+            if self["MotionRequest"]["alignPrecisely"].value == 0:
+                alignPreciselyModified = 1
+            elif self["MotionRequest"]["alignPrecisely"].value == 1:
+                alignPreciselyModified = 0
+            elif self["MotionRequest"]["alignPrecisely"].value == 2:
+                alignPreciselyModified = 0.5
+            kickBasics = (
+                self["MotionRequest"]["kickType"].name,
+                int(self["MotionRequest"]["kickLength"]),
+                alignPreciselyModified,
+            )
+        except:
+            return None
+        return kickBasics
+
+    @property
+    def rollOutResult(self) -> str:
+        try:
+            rollOutResult = self["GameControllerData"]["rollOutResult"]
+        except:
+            return None
+        return rollOutResult
 
     # Core
     @property

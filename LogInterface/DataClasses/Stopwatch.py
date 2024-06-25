@@ -12,7 +12,7 @@ from Utils import findClosestValidValue
 
 from .DataClass import DataClass
 
-EMPTY_INDICATOR = UInt(-1)
+EMPTY_INDICATOR = np.nan
 
 class Stopwatch(DataClass):
     def __init__(self):

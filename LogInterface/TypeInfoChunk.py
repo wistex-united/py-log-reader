@@ -190,7 +190,7 @@ class TypeInfoChunk(Chunk):
 
         size = sutil.readUInt()
         needsTypenameUnification = unifiedTypeNames & size == 0
-        size = size & ~unifiedTypeNames
+        size = UInt(np.int64(size) & ~np.int64(unifiedTypeNames))
         # print(f"Primitives num: {size}")
         for _ in range(size, 0, -1):
             type = sutil.readStr()

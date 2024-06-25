@@ -81,7 +81,7 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
         """The bytes of current index in frameIndexFile, which store the start and end message index of the frame"""
         byteIndex = self.absIndex * self.frameIdxByteLength
         return self.getBytesFromMmap(
-            self._idxFile.getData(), byteIndex, byteIndex + self.frameIdxByteLength
+            self.idxFile.getData(), byteIndex, byteIndex + self.frameIdxByteLength
         )
 
     @property

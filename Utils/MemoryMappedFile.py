@@ -18,9 +18,14 @@ class MemoryMappedFile:
         if os.path.exists(self.filename):
             self.size = os.path.getsize(self.filename)
             file = open(self.filename, "rb")
-            self.mmap = mmap.mmap(
-                file.fileno(), length=self.size, access=mmap.ACCESS_READ
-            )
+            try:
+                self.mmap = mmap.mmap(
+                    file.fileno(), length=self.size, access=mmap.ACCESS_READ
+                )
+            except ValueError as e:
+                raise OSError(
+                    f"Could not open {self.filename} for reading, as it is empty: {e}"
+                )
             self.data = self.mmap
             file.close()  # Close the file descriptor since mmap keeps its own reference
         else:
