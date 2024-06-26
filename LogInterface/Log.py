@@ -25,9 +25,6 @@ from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk
 from .UncompressedChunk import UncompressedChunk as UChunk
 
-CsvWriter = Any
-# TODO: separate top/root level specific functions into a separate class
-
 """
                                     Log
         //             //            ||               \\              \\

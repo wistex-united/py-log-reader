@@ -7,9 +7,12 @@ import numpy as np
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBaseClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from ..Message import MessageAccessor, MessageBase, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
@@ -49,7 +52,12 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
             self.indexCursor = key
             return self
         else:
-            return super().__getitem__(key)
+            result = self.log.getCachedInfo(self, key)
+            if result is not None:
+                return result
+            result = super().__getitem__(key).copy()
+            self.log.cacheInfo(self, key, result.copy().freeze())
+            return result
 
     # Core
     @property

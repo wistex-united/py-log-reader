@@ -59,10 +59,6 @@ class FrameBase(LogInterfaceBaseClass):
         Special case for "Annotation": There might be multiple Annotations in a frame, so please use frame["Annotations"] or frame.Annotations to get them
         """
         result = None
-        if self.isAccessorClass:
-            result = self.log.getCachedInfo(self, key)
-            if result is not None:
-                return result
 
         if key == "Annotation" or key == self.log.MessageID["idAnnotation"]:
             raise Exception(
@@ -80,12 +76,19 @@ class FrameBase(LogInterfaceBaseClass):
             if result is None:
                 raise KeyError(f"Message with key: {key} not found")
             else:
-                if result.isAccessorClass:
-                    result = result.copy()
-                    self.log.cacheInfo(self, key, result.copy().freeze())
                 return result
         else:
             raise KeyError("Invalid key type")
+
+    # def __getattribute__(self, name: str) -> MessageBase:
+    #     try:
+    #         result = super().__getattribute__(name)
+    #     except AttributeError as e:
+    #         if name in self:
+    #             result = self[name]
+    #         else:
+    #             raise e # e
+    #     return result
 
     # Common properties
     @property

@@ -68,6 +68,10 @@ class FrameInstance(FrameBase, LogInterfaceInstanceClass):
     def parent(self) -> Any:
         return self._parent
 
+    @parent.setter
+    def parent(self, value: Any) -> None:
+        self._parent = value
+
     def eval(self, sutil: StreamUtil, offset: int = 0):
         """
         Try to locate the start the end bytes of a frame

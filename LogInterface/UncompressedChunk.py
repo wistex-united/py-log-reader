@@ -568,10 +568,6 @@ class UncompressedChunk(Chunk):
 
     def __setstate__(self, state):
         super().__setstate__(state)
-        if hasattr(self, "_threads"):
-            for threadName, threadFrameAccessor in self._threads.items():
-                threadFrameAccessor._parent = self
-                threadFrameAccessor._log = self
 
     @property
     def providedAttributes(self) -> List[str]:

@@ -159,6 +159,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             "Accessor is only used to access messages already evaluated, it cannot eval"
         )
 
+    @property
     def isParsed(self) -> bool:
         return self.log.getCachedInfo(self, "reprObj") is not None
 

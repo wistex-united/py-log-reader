@@ -29,12 +29,12 @@ def main():
 
     # Dump all the representations into json and jpg images
     LOG.parseBytes()
-    for frame in tqdm.tqdm(LOG.frames):
-        if frame.hasImage:
-            frame.saveImageWithMetaData()
-        frame.saveFrameDict()
-        frame.saveImageWithMetaData(slientFail=True)
-    return
+    # for frame in tqdm.tqdm(LOG.frames):
+    #     if frame.hasImage:
+    #         frame.saveImageWithMetaData()
+    #     frame.saveFrameDict()
+    #     frame.saveImageWithMetaData(slientFail=True)
+    # return
 
     # Sample of how I recover trajectories
     OBS = ObservationJosh("WalkToBall")

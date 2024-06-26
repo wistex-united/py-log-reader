@@ -152,6 +152,16 @@ class MessageBase(LogInterfaceBaseClass):
     def __contains__(self, key: str) -> bool:
         return key in self.reprObj
 
+    # def __getattribute__(self, name: str) -> Any:
+    #     try:
+    #         result = super().__getattribute__(name)
+    #     except AttributeError as e:
+    #         if name in self:
+    #             result = self[name]
+    #         else:
+    #             raise e  # e
+    #     return result
+
     # Dump: pickle IO
     @property
     def picklePath(self) -> Path:
