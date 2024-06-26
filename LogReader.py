@@ -135,7 +135,7 @@ def main():
                 continue
             checkPointCallback(frame.indexCursor)
             print(f"Frame {frame.indexCursor}")
-
+            
             try:
                 gameState = frame["GameState"]
                 playerNumber = gameState["playerNumber"]
@@ -238,14 +238,12 @@ def main():
                     raise Exception(f"Unknown state: {state}")
                 prev_state = state
             except KeyError as e:
-                collisions.append((frame.absIndex, frame.classNames, e))
                 print(
-                    f"KeyError: {e} at frame {frame.absIndex} with {frame.classNames}"
+                    f"KeyError: {e} at frame {frame.absIndex}"
                 )
             except AssertionError as e:
-                collisions.append((frame.absIndex, frame.classNames, e))
                 print(
-                    f"AssertionError: {e} at frame {frame.absIndex} with {frame.classNames}"
+                    f"AssertionError: {e} at frame {frame.absIndex}"
                 )
             except Exception as e:
                 print(f"Exception: {e} at frame {frame.absIndex}")
