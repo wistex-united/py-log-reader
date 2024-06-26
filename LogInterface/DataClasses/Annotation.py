@@ -1,5 +1,7 @@
 import shlex
 
+import numpy as np
+
 from StreamUtils import StreamUtil
 
 from .DataClass import DataClass
@@ -34,7 +36,7 @@ class Annotation(DataClass):
         strings = list(lex)
         instance.name = strings.pop(0)
         instance.annotation = " ".join(strings)
-        instance.annotationNumber &= ~0x80000000
+        instance.annotationNumber = np.int32(np.int64(~0x80000000) & np.int64(instance.annotationNumber))
         return instance
 
     def asDict(self):

@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from PIL.Image import fromarray, open
 
+from Primitive import *
 from LogInterface import DataClass
 from StreamUtils import StreamUtil
 
@@ -18,6 +19,7 @@ class JPEGImage(ImageBase, DataClass):
     At:
     https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Representations/Infrastructure/JPEGImage.h
     """
+
     maxResolutionWidth = 1280
     maxResolutionHeight = 960
     readOrder = ["width", "height", "timestamp"]
@@ -33,7 +35,7 @@ class JPEGImage(ImageBase, DataClass):
         self.size: int
 
     @classmethod
-    def read(cls, sutil: StreamUtil, end: int) -> "JPEGImage":
+    def read(cls, sutil: StreamUtil, end) -> "JPEGImage":
         jpegImage = JPEGImage()
         width = sutil.readUInt()
         height = sutil.readUInt()
@@ -41,19 +43,18 @@ class JPEGImage(ImageBase, DataClass):
 
         if (timestamp & (1 << 31)) == 0:
             raise ValueError("Invalid timestamp")
-        timestamp &= ~(1 << 31)
-
+        timestamp = UInt(np.int64(~(1 << 31)) & np.int64(timestamp))
         jpegImage.size = sutil.readUInt()
 
         jpegImage.setResolution(width, height * 2)
-        jpegImage.timestamp = timestamp
+        jpegImage.timestamp = int(timestamp)
 
         rawImg = open(
             BytesIO(sutil.read(jpegImage.size)), formats=["JPEG"]
         )  # PIL deduce it is CMYK but it is actually YUYV
         jpegImage.image = 255 - np.array(rawImg).reshape((height * 2, width * 2, 2))
 
-        if not sutil.atEnd():
+        if sutil.tell() != end:
             raise ValueError("Buffer Size not used up")
 
         return jpegImage

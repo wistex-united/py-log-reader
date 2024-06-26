@@ -17,6 +17,7 @@ class CameraImage(ImageBase, DataClass):
     At:
     https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Representations/Infrastructure/JPEGImage.h
     """
+
     maxResolutionWidth = 1280
     maxResolutionHeight = 960
     readOrder = ["width", "height", "timestamp"]
@@ -53,7 +54,7 @@ class CameraImage(ImageBase, DataClass):
         raise NotImplementedError("getGrayscale not implemented")
 
     @classmethod
-    def read(cls, sutil: StreamUtil,end: int) -> "CameraImage":
+    def read(cls, sutil: StreamUtil, end) -> "CameraImage":
         cameraImage = CameraImage()
         width = sutil.readUInt()
         height = sutil.readUInt()
@@ -61,16 +62,16 @@ class CameraImage(ImageBase, DataClass):
 
         if timestamp & (1 << 31):
             height *= 2
-            timestamp &= ~(1 << 31)
-
+            timestamp = UInt(np.int64(~(1 << 31)) & np.int64(timestamp))
+        
         cameraImage.setResolution(width, height)
-        cameraImage.timestamp = timestamp
+        cameraImage.timestamp = int(timestamp)
 
         cameraImage.image = np.frombuffer(
             sutil.read(width * height * YUYVPixel.size), dtype=np.uint8
         ).reshape((height, width * 2, 2))
 
-        if not sutil.atEnd():
+        if sutil.tell() != end:
             raise ValueError("Buffer Size not used up")
 
         return cameraImage

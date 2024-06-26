@@ -245,6 +245,8 @@ class UncompressedChunk(Chunk):
         if len(unparsed) == 0:
             print("All messages are parsed")
             return
+        # for message in unparsed:
+        #     Wrapper((message.startByte + 4, message.endByte, message.classType.read))
         with Pool(cpu_count()) as p:
             results = list(
                 tqdm(
