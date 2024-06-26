@@ -4,6 +4,7 @@ from .DataClass import DataClass
 
 
 class FrameBegin(DataClass):
+    """The message class that always appear at the beginning of a frame"""
     readOrder = ["threadName"]
     attributeCtype = {"threadName": "std::string"}
 

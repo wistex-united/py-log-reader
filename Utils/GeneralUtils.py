@@ -1,3 +1,6 @@
+"""
+Tool functions set. All the function will be exposed in Utils package
+"""
 import json
 import mmap
 import os

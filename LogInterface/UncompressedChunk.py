@@ -1,32 +1,31 @@
 import asyncio
 import csv
-import io
 import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from mailbox import Message
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import numpy as np
 from tqdm import tqdm
 
 from Primitive.PrimitiveDefinitions import UChar
-from StreamUtils import StreamUtil
+from StreamUtils import AbsoluteByteIndex, StreamUtil, SutilCursor
 from Utils import MemoryMappedFile
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass, Stopwatch, Timer
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import IndexMap
+from .LogInterfaceBase import LogInterfaceAccessorClass, IndexMap
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
-
-SutilCursor = int
-AbsoluteByteIndex = int
 
 
 class UncompressedChunk(Chunk):
+    """
+    This chunk stores all the messages in the log file
+    It contains list of Frames
+    """
+
     def __init__(self, parent):
         super().__init__(parent)
         self._threads: Dict[str, Frames] = {}
@@ -54,7 +53,14 @@ class UncompressedChunk(Chunk):
         if frameIdxFilePath.exists():
             frameIdxFilePath.unlink()
 
-    def evalLarge(self, sutil: StreamUtil, offset: int = 0):
+    def evalFrameAccessor(self, sutil: StreamUtil, offset: int = 0):
+        """
+        This is the new eval function to support large log files
+        The main difference is that it will write index files and instantiate UncompressedChunk.frames to Accessor class instead of Instance class
+        The Accessor class parse log bytes on need and cache it in Log class
+        The Instance class needed to be parsed before accessing its attributes and cache in its own class
+        """
+
         startPos: SutilCursor = sutil.tell()
         chunkMagicBit: UChar = sutil.readUChar()
         if chunkMagicBit != ChunkEnum.UncompressedChunk.value:
@@ -142,19 +148,20 @@ class UncompressedChunk(Chunk):
                 threadIndexMaps[frame.threadName].append(index)
         for threadName, indexes in threadIndexMaps.items():
             self._threads[threadName] = FrameAccessor(self.log, indexes)
-        # Sicne the file is large, storing data in memory isn't a good idea.
         self._startByte = offset
         self._endByte = sutil.tell() - startPos + offset
 
-    def eval(self, sutil: StreamUtil, offset: int = 0):
-        startPos = sutil.tell()
-        chunkMagicBit = sutil.readUChar()
+    def evalFrameAndMessageInstances(self, sutil: StreamUtil, offset: int = 0):
+        """
+        Norma eval function
+        It will instantiate and create a list of frame & message instance class with their bytes index in logfile provided (not parsed yet)
+        """
+        startPos: SutilCursor = sutil.tell()
+        chunkMagicBit: UChar = sutil.readUChar()
         if chunkMagicBit != ChunkEnum.UncompressedChunk.value:
             raise Exception(
                 f"Expect magic number {ChunkEnum.UncompressedChunk.value}, but get:{chunkMagicBit}"
             )
-
-        self.frames = []
 
         header = sutil.readQueueHeader()
 
@@ -163,6 +170,8 @@ class UncompressedChunk(Chunk):
         logSize = os.path.getsize(self.parent.logFilePath)
         remainingSize = logSize - offset
         hasIndex = header[1] != 0x0FFFFFFF and usedSize != (logSize - offset)
+
+        self.frames = []
 
         messageStartByte = offset + (sutil.tell() - startPos)
         byteIndex = 0
@@ -192,7 +201,23 @@ class UncompressedChunk(Chunk):
         self._startByte = offset
         self._endByte = sutil.tell() - startPos + offset
 
-    def parseBytes(self, showProgress: bool = True, cacheRepr: bool = True):
+    def eval(self, sutil: StreamUtil, offset: int = 0, evalAccessor: bool = False):
+        """
+        Consistent interface for eval
+        """
+        if evalAccessor:
+            self.evalFrameAccessor(sutil, offset)
+        else:
+            self.evalFrameAndMessageInstances(sutil, offset)
+
+    def parseBytes(self, showProgress: bool = True, cacheReprs: bool = False):
+        """
+        DEPENDENCY: eval()
+        Warning: Consume lots of memory (2GB logfile will consume 30GB memory)
+        Parse the whole log file in to representation objects in messages class (Bhuman)
+        It need instance classes to be already create by eval()
+        It can also cache all the representation objects into pickle files and will be automatically loaded (No need to be parsed next time)
+        """
         Wrapper = partial(MessageBase.parseBytesWrapper, logFilePath=self.logFilePath)
         cached = []
         parsed = []
@@ -203,7 +228,7 @@ class UncompressedChunk(Chunk):
         for message in tqdm(
             self.messages, desc="Checking Message Parsed", disable=not showProgress
         ):
-            if message.isParsed():
+            if message.isParsed:
                 parsed.append(message)
                 continue
             elif message.hasPickledRepr():
@@ -248,98 +273,10 @@ class UncompressedChunk(Chunk):
                 # if not hasattr(self.messages[idx].frame, "timer"):
                 frameTmp: FrameBase = unparsed[idx].frame
                 frameTmp.timer.parseStopwatch(result, frameTmp.index)
-        if cacheRepr:
+        if cacheReprs:
             asyncio.get_event_loop().run_until_complete(
                 self.dumpReprs(results, unparsed)
             )
-
-    @classmethod
-    def checkThroughFrameIndex(
-        cls,
-        log,
-        checkFrameRange: Optional[IndexMap] = None,
-    ):
-        indexFrameFilePath = log.cacheDir / FrameAccessor.idxFileName()
-        try:
-            tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
-        except OSError as e:
-            return False
-
-        frameIndexFileSize = tempFrameIdxFile.getSize()
-        lastFrameIndex = frameIndexFileSize // FrameAccessor.frameIdxByteLength - 1
-
-        if isinstance(checkFrameRange, range):
-            checkFrameRange = list(checkFrameRange)
-
-        if checkFrameRange is None:
-            checkFrameRange = range(0, lastFrameIndex + 1)
-        else:
-            checkFrameRange += [lastFrameIndex]
-
-        for frameIdx in tqdm(checkFrameRange, desc="Checking Frame Index"):
-            startByte = frameIdx * FrameAccessor.frameIdxByteLength
-            endByte = startByte + FrameAccessor.frameIdxByteLength
-            frameIndexBytes = tempFrameIdxFile.getData()[startByte:endByte]
-            frameIndex = FrameAccessor.decodeIndexBytes(frameIndexBytes)
-
-            if frameIndex[0] != frameIdx:
-                return False
-            if frameIdx != 0:
-                prevFrameIndex = FrameAccessor.decodeIndexBytes(
-                    tempFrameIdxFile.getData()[
-                        startByte
-                        - FrameAccessor.frameIdxByteLength : endByte
-                        - FrameAccessor.frameIdxByteLength
-                    ]
-                )
-                if frameIndex[2] != prevFrameIndex[3]:
-                    return False
-        return True
-
-    @classmethod
-    def checkThroughMessageIndex(
-        cls,
-        log,
-        checkMessageRange: Optional[IndexMap] = None,
-    ):
-        indexMessageFilePath = log.cacheDir / MessageAccessor.idxFileName()
-        try:
-            tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
-        except OSError as e:
-            return False
-
-        messageIndexFileSize = tempMessageIdxFile.getSize()
-        lastMessageIndex = (
-            messageIndexFileSize // MessageAccessor.messageIdxByteLength - 1
-        )
-
-        if isinstance(checkMessageRange, range):
-            checkMessageRange = list(checkMessageRange)
-
-        if checkMessageRange is None:
-            checkMessageRange = range(0, lastMessageIndex + 1)
-        else:
-            checkMessageRange += [lastMessageIndex]
-
-        for messageIdx in tqdm(checkMessageRange, desc="Checking Message Index"):
-            startByte = messageIdx * MessageAccessor.messageIdxByteLength
-            endByte = startByte + MessageAccessor.messageIdxByteLength
-            messageIndexBytes = tempMessageIdxFile.getData()[startByte:endByte]
-            messageIndex = MessageAccessor.decodeIndexBytes(messageIndexBytes)
-
-            if messageIndex[0] != messageIdx:
-                return False
-            if messageIdx != 0:
-                prevMessageIndex = MessageAccessor.decodeIndexBytes(
-                    tempMessageIdxFile.getData()[
-                        startByte
-                        - MessageAccessor.messageIdxByteLength : endByte
-                        - MessageAccessor.messageIdxByteLength
-                    ]
-                )
-                if messageIndex[2] != prevMessageIndex[3]:
-                    return False
-        return True
 
     # Index file Validation
     @classmethod
@@ -450,6 +387,97 @@ class UncompressedChunk(Chunk):
             f.truncate(messageTruncatePos * MessageAccessor.messageIdxByteLength)
         return True
 
+    @classmethod
+    def checkThroughFrameIndex(
+        cls,
+        log,
+        checkFrameRange: Optional[IndexMap] = None,
+    ):
+        """Check all the frames in frame index file to validate the correctness of the index file"""
+        indexFrameFilePath = log.cacheDir / FrameAccessor.idxFileName()
+        try:
+            tempFrameIdxFile = MemoryMappedFile(indexFrameFilePath)
+        except OSError as e:
+            return False
+
+        frameIndexFileSize = tempFrameIdxFile.getSize()
+        lastFrameIndex = frameIndexFileSize // FrameAccessor.frameIdxByteLength - 1
+
+        if isinstance(checkFrameRange, range):
+            checkFrameRange = list(checkFrameRange)
+
+        if checkFrameRange is None:
+            checkFrameRange = range(0, lastFrameIndex + 1)
+        else:
+            checkFrameRange += [lastFrameIndex]
+
+        for frameIdx in tqdm(checkFrameRange, desc="Checking Frame Index"):
+            startByte = frameIdx * FrameAccessor.frameIdxByteLength
+            endByte = startByte + FrameAccessor.frameIdxByteLength
+            frameIndexBytes = tempFrameIdxFile.getData()[startByte:endByte]
+            frameIndex = FrameAccessor.decodeIndexBytes(frameIndexBytes)
+
+            if frameIndex[0] != frameIdx:
+                return False
+            if frameIdx != 0:
+                prevFrameIndex = FrameAccessor.decodeIndexBytes(
+                    tempFrameIdxFile.getData()[
+                        startByte
+                        - FrameAccessor.frameIdxByteLength : endByte
+                        - FrameAccessor.frameIdxByteLength
+                    ]
+                )
+                if frameIndex[2] != prevFrameIndex[3]:
+                    return False
+        return True
+
+    @classmethod
+    def checkThroughMessageIndex(
+        cls,
+        log,
+        checkMessageRange: Optional[IndexMap] = None,
+    ):
+        """Check messages in message index file to validate the correctness of the index file"""
+
+        indexMessageFilePath = log.cacheDir / MessageAccessor.idxFileName()
+        try:
+            tempMessageIdxFile = MemoryMappedFile(indexMessageFilePath)
+        except OSError as e:
+            return False
+
+        messageIndexFileSize = tempMessageIdxFile.getSize()
+        lastMessageIndex = (
+            messageIndexFileSize // MessageAccessor.messageIdxByteLength - 1
+        )
+
+        if isinstance(checkMessageRange, range):
+            checkMessageRange = list(checkMessageRange)
+
+        if checkMessageRange is None:
+            checkMessageRange = range(0, lastMessageIndex + 1)
+        else:
+            checkMessageRange += [lastMessageIndex]
+
+        for messageIdx in tqdm(checkMessageRange, desc="Checking Message Index"):
+            startByte = messageIdx * MessageAccessor.messageIdxByteLength
+            endByte = startByte + MessageAccessor.messageIdxByteLength
+            messageIndexBytes = tempMessageIdxFile.getData()[startByte:endByte]
+            messageIndex = MessageAccessor.decodeIndexBytes(messageIndexBytes)
+
+            if messageIndex[0] != messageIdx:
+                return False
+            if messageIdx != 0:
+                prevMessageIndex = MessageAccessor.decodeIndexBytes(
+                    tempMessageIdxFile.getData()[
+                        startByte
+                        - MessageAccessor.messageIdxByteLength : endByte
+                        - MessageAccessor.messageIdxByteLength
+                    ]
+                )
+                if messageIndex[2] != prevMessageIndex[3]:
+                    return False
+        return True
+
     # Repr batch IO
     async def loadReprs(self, unparsed: Messages) -> List[DataClass]:
         loop = asyncio.get_running_loop()
@@ -536,63 +564,6 @@ class UncompressedChunk(Chunk):
                     ]
                 )
 
-    # def readMessageIndexCsv(self, indexFilePath, logFilePath):
-    #     # MessageID = self.log.MessageID
-    #     self._children = []
-    #     self._threads = {}
-    #     self._timers = {}
-    #     with open(indexFilePath, "r") as f:
-    #         reader = csv.reader(f)
-    #         # next(reader)
-    #         frame: FrameInstance = None  # type: ignore
-    #         for row in reader:
-    #             if int(row[2]) == 1:  # idFrameBegin
-    #                 frame = FrameInstance(self)
-    #                 frame._children = []
-    #                 frame.dummyMessages = []
-
-    #             message = MessageInstance(frame)
-    #             message._index_cached = int(row[0])
-    #             message._logId = UChar(row[2])
-    #             message._startByte = int(row[3])
-    #             message._endByte = int(row[4])
-
-    #             if len(frame.children) != message.index:
-    #                 raise ValueError
-    #             frame._children.append(message)  # type: ignore
-    #             if int(row[2]) == 2:  # idFrameEnd
-    #                 frame._index_cached = int(row[1])
-    #                 if len(self.frames) != frame.index:
-    #                     raise ValueError
-    #                 frame._startByte = frame.messages[0].startByte
-    #                 frame._endByte = frame.messages[-1].endByte
-
-    #                 self._children.append(frame)
-    #                 with open(logFilePath, "rb") as logFile:
-    #                     nameStartByte = frame.messages[-1].startByte + 4 + 4
-    #                     nameEndByte = frame.messages[-1].endByte
-    #                     logFile.seek(nameStartByte)
-    #                     threadName = logFile.read(nameEndByte - nameStartByte).decode()
-    #                 if threadName not in self._threads:
-    #                     self._threads[threadName] = []
-    #                     self._timers[threadName] = Timer()
-    #                 self._threads[threadName].append(frame)  # type: ignore
-
-    #     for threadName, threadFrames in self._threads.items():
-    #         self._timers[threadName].initStorage(
-    #             [frame.index for frame in threadFrames]
-    #         )
-    #     if len(self.frames) == 0:
-    #         raise ValueError
-
-    #     self._startByte = self.frames[0].startByte
-    #     self._endByte = self.frames[-1].endByte
-
-    # def __getstate__(self):
-    #     states=super().__getstate__()
-
-    #     return states
-
     def __setstate__(self, state):
         super().__setstate__(state)
         if hasattr(self, "_threads"):
@@ -613,17 +584,13 @@ class UncompressedChunk(Chunk):
         if hasattr(self, "_messages_cached"):
             return self._messages_cached
         self._messages_cached = []
-        if self.frames.isAccessorClass:
-            self._messages_cached = self.log.getMessageAccessor()
-        else:
-            # Danger Zone, poor performace
-            raise Exception("Danger Zone, poor performace")
-            for frame in self.frames:
-                if frame.children.isAccessorClass:
-                    for message in frame.children:
-                        self._messages_cached.append(message.copy())
-                else:  # Instance class
-                    self._messages_cached.extend(frame.messages)  # type: ignore
+
+        for frame in self.frames:
+            if isinstance(frame.children, LogInterfaceAccessorClass):
+                for message in frame.children:
+                    self._messages_cached.append(message.copy().freeze())
+            else:  # Instance class
+                self._messages_cached.extend(frame.messages)
         return self._messages_cached
 
     def thread(self, name: str) -> Frames:

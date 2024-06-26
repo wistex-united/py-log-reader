@@ -8,9 +8,12 @@ from Utils import MemoryMappedFile
 from Utils.GeneralUtils import canBeRange
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBaseClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from .MessageBase import MessageBase
 from .MessageInstance import MessageInstance
 
@@ -46,9 +49,6 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
     def __init__(self, log: Any, indexMap: Optional[IndexMap] = None):
         LogInterfaceAccessorClass.__init__(self, log, indexMap)
-        # cache
-        self._reprObj_cached: Dict[int, DataClass] = {}
-        self._reprDict_cached: Dict[int, Dict[str, Any]] = {}
 
     def __getitem__(
         self, indexOrKey: Union[int, str]
@@ -71,9 +71,9 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
     @property
     def reprObj(self) -> DataClass:
-        if not self.isParsed():
+        if not self.isParsed:
             self.parseBytes()
-        return self._reprObj_cached[self.absIndex]
+        return self.log.getCachedInfo(self, "reprObj")
 
     @reprObj.setter
     def reprObj(self, value: DataClass):
@@ -82,9 +82,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             raise ValueError("Invalid representation object")
         if isinstance(value, Annotation):
             value.frame = self.frame.threadName
-        self._reprObj_cached[self.absIndex] = value
-        if len(self._reprObj_cached) > self.maxCachedReprObj:
-            self._reprObj_cached.popitem(last=False)
+        self.log.cacheInfo(self, "reprObj", value)
 
     # Index file related
     @staticmethod
@@ -165,7 +163,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         )
 
     def isParsed(self) -> bool:
-        return self.absIndex in self._reprObj_cached
+        return self.log.getCachedInfo(self, "reprObj") is not None
 
     def hasPickledRepr(self) -> bool:
         if os.path.isfile(self.reprPicklePath):  # type: ignore
@@ -174,15 +172,19 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
     @property
     def reprDict(self) -> Dict[str, Any]:
-        if self.absIndex not in self._reprDict_cached:
-            if isinstance(self.reprObj, Stopwatch):
-                # We don't want to replace our orignal Stopwatch object
-                self._reprDict_cached[self.absIndex] = self.frame.timer.getStopwatch(
-                    self.frameIndex
-                ).asDict()
-            else:
-                self._reprDict_cached[self.absIndex] = self.reprObj.asDict()
-        return self._reprDict_cached[self.absIndex]
+        result = self.log.getCachedInfo(self, "reprDict")
+        if result is None:
+            # TODO: make full implementation of Stopwatch
+            # if isinstance(self.reprObj, Stopwatch):
+            #     # We don't want to replace our orignal Stopwatch object
+            #     self.log.cacheInfo(
+            #         self,
+            #         "reprDict",
+            #         self.frame.timer.getStopwatch(self.frameIndex).asDict(),
+            #     )
+            # else:
+            self.log.cacheInfo(self, "reprDict", self.reprObj.asDict())
+        return self.log.getCachedInfo(self, "reprDict")
 
     @staticmethod
     def getInstanceClass() -> Type["MessageInstance"]:
@@ -194,7 +196,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         result._startByte = self.startByte
         result._endByte = self.endByte
         result._logId = UChar(self.logId)
-        if self.isParsed():
+        if self.isParsed:
             result.reprObj = self.reprObj
         result._absIndex_cached = self.absIndex
         return result

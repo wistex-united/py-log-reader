@@ -12,71 +12,39 @@ from pympler import muppy, summary, tracker
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils import ObservationJosh, countLines, extractTrajNumbers, readLastLine
-
-
-def start_tracing():
-    tracemalloc.start()
-
-
-def display_top(snapshot, key_type="lineno", limit=10):
-    snapshot = snapshot.filter_traces(
-        (
-            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-            tracemalloc.Filter(False, "<unknown>"),
-        )
-    )
-    top_stats = snapshot.statistics(key_type)
-
-    print(f"Top {limit} lines")
-    for index, stat in enumerate(top_stats[:limit], 1):
-        frame = stat.traceback[0]
-        print(f"#{index}: {frame.filename}:{frame.lineno} - {stat.size / 1024:.1f} KiB")
-        line = linecache.getline(frame.filename, frame.lineno).strip()
-        if line:
-            print(f"    {line}")
-
-    other = top_stats[limit:]
-    if other:
-        size = sum(stat.size for stat in other)
-        print(f"{len(other)} other: {size / 1024:.1f} KiB")
-    total = sum(stat.size for stat in top_stats)
-    print(f"Total allocated size: {total / 1024:.1f} KiB")
-
-
-def stop_tracing():
-    snapshot = tracemalloc.take_snapshot()
-    display_top(snapshot)
-
-
-def report_memory_usage():
-    all_objects = muppy.get_objects()
-    sum_objects = summary.summarize(all_objects)
-    summary.print_(sum_objects)
-
-    tr = tracker.SummaryTracker()
-    tr.print_diff()
+from Utils import (
+    ObservationJosh,
+    countLines,
+    displayTopMemoryConsumers,
+    extractTrajNumbers,
+    readLastLine,
+    startMemoryTracing,
+)
 
 
 def checkPointCallback(cnt):
     if cnt % 1000 == 0:
         print(f"Checkpoint: {cnt}")
         snapshot = tracemalloc.take_snapshot()
-        display_top(snapshot)
+        displayTopMemoryConsumers(snapshot)
 
 
 def main():
-    start_tracing()
+    startMemoryTracing()
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("traj9_bh.log")
-    LOG.readLogFile("traj16_formal.log")
-    LOG.eval()
-    # LOG.parseBytes()
-    # for frame in tqdm.tqdm(LOG.frames):
-    #     frame.saveFrameDict()
-    #     frame.saveImageWithMetaData(slientFail=True)
-    # return
+    LOG.readLogFile("t.log")
+    LOG.eval(forceReEval=True)
+
+    # Dump all the representations into json and jpg images
+    LOG.parseBytes()
+    for frame in tqdm.tqdm(LOG.frames):
+        if frame.hasImage:
+            frame.saveImageWithMetaData()
+        frame.saveFrameDict()
+        frame.saveImageWithMetaData(slientFail=True)
+    return
 
     OBS = ObservationJosh("WalkToBall")
     index = 0
@@ -136,7 +104,7 @@ def main():
                 continue
             checkPointCallback(frame.indexCursor)
             print(f"Frame {frame.indexCursor}")
-            
+
             try:
                 gameState = frame["GameState"]
                 playerNumber = gameState["playerNumber"]
@@ -239,13 +207,9 @@ def main():
                     raise Exception(f"Unknown state: {state}")
                 prev_state = state
             except KeyError as e:
-                print(
-                    f"KeyError: {e} at frame {frame.absIndex}"
-                )
+                print(f"KeyError: {e} at frame {frame.absIndex}")
             except AssertionError as e:
-                print(
-                    f"AssertionError: {e} at frame {frame.absIndex}"
-                )
+                print(f"AssertionError: {e} at frame {frame.absIndex}")
             except Exception as e:
                 print(f"Exception: {e} at frame {frame.absIndex}")
                 raise

@@ -10,6 +10,13 @@ from .PixelTypes import YUVPixel, YUYVPixel
 
 
 class CameraImage(ImageBase, DataClass):
+    """
+    The YUYV image generated directly by robot's camera, usually used by log from SimRobot
+
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Representations/Infrastructure/JPEGImage.h
+    """
     maxResolutionWidth = 1280
     maxResolutionHeight = 960
     readOrder = ["width", "height", "timestamp"]
@@ -67,15 +74,6 @@ class CameraImage(ImageBase, DataClass):
             raise ValueError("Buffer Size not used up")
 
         return cameraImage
-
-    @classmethod
-    def getReadInstructions(cls):
-        """Read Instructions does support dynamic length, so this instruction would only read the width, height and timestamp, leaving the image bytes unread"""
-        return [
-            (UInt, 1),  # width
-            (UInt, 1),  # height
-            (UInt, 1),  # timestamp
-        ]
 
     @classmethod
     def distributeReadResult(cls, result) -> "CameraImage":

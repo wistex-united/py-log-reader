@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Union
+from typing import Any, List, Union
 
 from StreamUtils import StreamUtil
 
@@ -71,9 +71,9 @@ class FrameInstance(FrameBase, LogInterfaceInstanceClass):
     def eval(self, sutil: StreamUtil, offset: int = 0):
         """
         Try to locate the start the end bytes of a frame
-        Start at the FrameBegin message and end at the FrameEnd message
-        FrameBegin and FrameEnd should have the same threadName
-        It will keep evaluating messages util it finds a corresponding FrameEnd message
+        Start at the FrameBegin message and end at the FrameFinished message
+        FrameBegin and FrameFinished should have the same threadName
+        It will keep evaluating messages util it finds a corresponding FrameFinished message
         """
         startPos = sutil.tell()
         self.messages = []
@@ -119,3 +119,11 @@ class FrameInstance(FrameBase, LogInterfaceInstanceClass):
         # TODO: Think twice whether I should use offset+dummyEnd instead, since that's the real start of valid messages
         self._startByte = offset
         self._endByte = byteIndex - startPos + offset
+
+    # Derived Properties
+    @property
+    def classNames(self) -> List[str]:
+        result = []
+        for message in self.messages:
+            result.append(message.className)
+        return result

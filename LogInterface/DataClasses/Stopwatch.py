@@ -12,9 +12,22 @@ from Utils import findClosestValidValue
 
 from .DataClass import DataClass
 
-EMPTY_INDICATOR = np.nan
+EMPTY_INDICATOR = np.iinfo(UInt).max
 
 class Stopwatch(DataClass):
+    """
+    Stopwatch message, which would appear when 'dr timing' is set
+    However, each frame would not log all the stopwatches, ususally it would
+    record time cost of 3 modules (for example, NeuralControl).
+
+    To get the whole interpolated time cost information, please
+    theadTimer.getTimeCost(frameIdx) which will return an interpolated
+    Stopwatch instance with time cost of all modules
+
+    NOTE: This class is modified from the Bhuman stopwatch class but is not
+    totally a different thing
+    """
+
     def __init__(self):
         super().__init__()
         self.names: Dict[int, str]
@@ -86,6 +99,11 @@ class Stopwatch(DataClass):
 
 
 class Timer:
+    """
+    Each thread has a Timer instance, it would collect information from stopwatches
+    from all frames in the thread and interpolate the time cost of each module
+    """
+
     def __init__(self):
         super().__init__()
         self.names: Dict[int, str] = {}

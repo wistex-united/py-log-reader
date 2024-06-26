@@ -16,9 +16,12 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                               LogInterfaceBaseClass,
-                               LogInterfaceInstanceClass)
+from .LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
@@ -45,10 +48,17 @@ class Log(LogInterfaceInstanceClass):
     """
     Root class for the Log interface, it holds all the information of the log file in its logBytes field
     To use it,
+
+    For small log file, it is recommended to parse all bytes at once
     1. readLogFile(filePath)
     2. eval()
     3. parseBytes()
     4. Do something on the parsed data
+
+    For large log file (if log file size * 15 > you memory size)
+    1. readLogFile(filePath)
+    2. eval(isLogFileLarge=True)
+    3. Do something on the parsed data
     """
 
     class EvalInformationFormat(Enum):
@@ -73,7 +83,6 @@ class Log(LogInterfaceInstanceClass):
         self._logFilePath: str
 
         # cache
-        self._messageIndexCSVWriter_cached: CsvWriter  # csv writer
         self._messageCachedReprList_cached: NDArray[Bool]
 
     def __getitem__(self, key: Union[int, str, ChunkEnum]) -> Chunk:
@@ -105,15 +114,6 @@ class Log(LogInterfaceInstanceClass):
     def logFilePath(self) -> str:
         return self._logFilePath
 
-    @property
-    def messageIndexCSVWriter(self) -> CsvWriter:
-        if hasattr(self, "_messageIndexCSVWriter_cached"):
-            return self._messageIndexCSVWriter_cached
-        else:
-            f = open(f"{Path(self.logFilePath).stem}/messageIndex.csv", "w")
-            self._messageIndexCSVWriter_cached = csv.writer(f)
-        return self._messageIndexCSVWriter_cached
-
     def __getstate__(self):
         state = super().__getstate__()
         if state.get("file", None):
@@ -131,12 +131,14 @@ class Log(LogInterfaceInstanceClass):
         self,
         sutil: StreamUtil = None,  # type: ignore TODO: usually we use the Log's file stream
         offset: int = 0,
+        isLogFileLarge: bool = False,
+        forceReEval: bool = False,
     ):
         """
         This function evaluate the the start and end position of messages, read settings and write the LogClasses
         The first time you run eval on a log file, it will dump an indexes file, and use the file afterwards
         """
-        if os.path.isfile(self.picklePath):
+        if not forceReEval and os.path.isfile(self.picklePath):
             try:
                 self.pickleLoad()
                 return
@@ -166,8 +168,7 @@ class Log(LogInterfaceInstanceClass):
             match chunkMagicBit:
                 case ChunkEnum.UncompressedChunk.value:
                     self.UncompressedChunk = UChunk(self)
-                    # self.UncompressedChunk.eval(sutil, offset)
-                    self.UncompressedChunk.evalLarge(sutil, offset)
+                    self.UncompressedChunk.eval(sutil, offset, isLogFileLarge)
                     self._children.append(self.UncompressedChunk)
                 case ChunkEnum.CompressedChunk.value:
                     raise NotImplementedError("Compressed chunk not implemented")
@@ -293,7 +294,7 @@ class Log(LogInterfaceInstanceClass):
             else:
                 raise ValueError
         else:
-            raise ValueError
+            raise ValueError(f"Unsupported type {obj.__class__.__name__}")
         absIndex = obj.absIndex
 
         if not hasattr(self, "_Info_cached") or self._Info_cached is None:

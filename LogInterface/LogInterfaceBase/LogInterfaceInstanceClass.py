@@ -47,9 +47,9 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
         if self.parent is None:
             return 0
         if not hasattr(self, "_index_cached"):
-            return self.parent.indexOf(self)
-        else:
-            return self._index_cached
+            for i, c in enumerate(self.parent.children):
+                c._index_cached = i
+        return self._index_cached
 
     @property
     def log(self) -> "Any":
@@ -65,11 +65,8 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
 
     # IO using pickle
     def pickleDump(self):
-        print(f"Pickling {self.picklePath}")
         os.makedirs(self.picklePath.parent, exist_ok=True)
-        # FrameAccessor.getInstanceClass()
         pickle.dump(self, open(self.picklePath, "wb"))
-        print("finished pickling")
 
     def pickleLoad(self):
         self.__setstate__(pickle.load(open(self.picklePath, "rb")).__dict__)

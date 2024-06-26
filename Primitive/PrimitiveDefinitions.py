@@ -5,7 +5,7 @@ import numpy as np
 from .Angle import Angle
 
 # To map the Log's c++ type to python type, we create a series of primitive types here
-# Currently I map them to numpy types
+# Currently I map c++ types to numpy types
 UInt = np.uint32
 """Python primitive type for unsigned int"""
 Int = np.int32

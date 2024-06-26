@@ -1,4 +1,3 @@
-from email import message
 from enum import Enum
 from importlib import import_module
 from typing import Any, List, Optional, Tuple, Type, Union
@@ -8,9 +7,12 @@ import numpy as np
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBaseClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from ..Message import MessageAccessor, MessageBase, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
@@ -124,9 +126,9 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
 
     @parent.setter
     def parent(self, value: LogInterfaceBaseClass):
-        valueClassName=value.__class__.__name__
-        if valueClassName=="UncompressedChunk" or valueClassName=="CompressedChunk":
-            return 
+        valueClassName = value.__class__.__name__
+        if valueClassName == "UncompressedChunk" or valueClassName == "CompressedChunk":
+            return
         else:
             raise ValueError(f"Invalid parent type: {valueClassName}")
 
@@ -150,6 +152,19 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
         also the indexCursor after the indexMap is updated
         """
         raise NotImplementedError("Not Implemented yet")
+
+    # Derived properties
+    @property
+    def classNames(self) -> List[str]:
+        result = self.log.getCachedInfo(self, "classNames")
+        if result is not None:
+            pass
+        else:
+            result = []
+            for message in self.messages:
+                result.append(message.className)
+            self.log.cacheInfo(self, "classNames", result)
+        return result
 
     @staticmethod
     def getInstanceClass() -> Type["FrameInstance"]:

@@ -4,6 +4,7 @@ from .DataClass import DataClass
 
 
 class FrameFinished(DataClass):
+    """The message class that always appear at the end of a frame"""
 
     readOrder = ["threadName"]
     attributeCtype = {"threadName": "std::string"}

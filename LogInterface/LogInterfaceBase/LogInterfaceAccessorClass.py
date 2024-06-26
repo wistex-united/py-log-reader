@@ -12,10 +12,16 @@ from .LogInterfaceInstanceClass import LogInterfaceInstanceClass
 
 
 class LogInterfaceAccessorClass(LogInterfaceBaseClass):
-    @staticmethod
-    @functools.lru_cache(maxsize=1000)
-    def getBytesFromMmap(idxFile: mmap, indexStart: int, indexEnd: int) -> bytes:
-        return idxFile[indexStart:indexEnd]
+    """
+    An Iterator Class, mainly used when accessing large log files
+    Very light weight, feel free to copy many of it
+
+    All of its functionality is based on log class
+    , if you cannot access the log class when instantiate accessor
+    , you can also pass in a class that will be in the log
+    hierarchy when you start to use the accessor, the
+    accessor would delay the resolve of log class
+    """
 
     def __init__(self, log: Any, indexMap: Optional[IndexMap]):
         """Core invariants: log; idxFileName; indexMap (valid range of the accessor)"""
@@ -27,13 +33,10 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
         self.indexMap = indexMap
 
-        # self._parent: LogInterfaceBaseClass
-        # self._parentIsAssigend: bool = False
-
         self.indexCursor = 0
 
         # cache
-        self._iterStart_cache = True
+        self._iterStart = True
 
     def __len__(self):
         return len(self._indexMap)
@@ -41,13 +44,13 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     def __iter__(self):
         result = self.copy()
         result.indexCursor = 0
-        result._iterStart_cache = True
+        result._iterStart = True
         return result
 
     def __next__(self):
         try:
-            if self._iterStart_cache:
-                self._iterStart_cache = False
+            if self._iterStart:
+                self._iterStart = False
             else:
                 self.indexCursor += 1  # Will raise IndexError if out of range
             return self
@@ -98,13 +101,17 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         while hasattr(self._log, "parent") and self._log.parent is not None:
             self._log = self._log.parent
         return self._log
+
     @property
     def idxFile(self) -> MemoryMappedFile:
         if not hasattr(self, "_idxFile"):
             if not self.indexFilePath.exists():
-                raise OSError(f"Accessor depends on index file, not found: {self.indexFilePath}")
+                raise OSError(
+                    f"Accessor depends on index file, not found: {self.indexFilePath}"
+                )
             self._idxFile = MemoryMappedFile(self.indexFilePath)
         return self._idxFile
+
     @log.setter
     def log(self, value: Any) -> None:
         self._log = value
@@ -157,6 +164,11 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     def getInstanceClass() -> Type["LogInterfaceInstanceClass"]:
         pass
 
+    @staticmethod
+    @functools.lru_cache(maxsize=1000)
+    def getBytesFromMmap(idxFile: mmap, indexStart: int, indexEnd: int) -> bytes:
+        return idxFile[indexStart:indexEnd]
+    
     @property
     def indexCursor(self) -> int:
         return self._indexCursor
@@ -229,6 +241,10 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
     # Tools
     def copy(self) -> "LogInterfaceAccessorClass":
+        """
+        Copy and accessor with the same indexCursor
+        NOTE: copy() will not copy frozen state
+        """
         result = self.log.getAccessorCopyOf(self)
         result.indexCursor = self.indexCursor
         return result
@@ -270,4 +286,8 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         return True
 
     def freeze(self) -> None:
+        """
+        Freeze the object's absIndex (if it is a iterator, it won't be able to move anymore)
+        NOTE: copy() will not copy frozen state
+        """
         self._frozen = True

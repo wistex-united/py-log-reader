@@ -22,6 +22,10 @@ length:
 TODO: It should be an recursive Type, but I don't want to use python __future__.annotation to support it.
 """
 
+SutilCursor = int
+"""Alias type for StreamUtil's cursor position"""
+AbsoluteByteIndex = int
+"""Alias type for absolute byte index in log file"""
 
 class StreamUtil:
     """Suggestion: if you assign a stream to StreamUtil, you should not use it elsewhere"""
@@ -58,7 +62,7 @@ class StreamUtil:
             raise ValueError("Stream not set")
 
     def read(self, numBytes):
-        if self.remainSize() < numBytes:
+        if self.remainingSize() < numBytes:
             raise EOFError("Not enough data to read")
         result = self.stream.read(numBytes)
         self.numReadedBytes += numBytes
@@ -70,12 +74,13 @@ class StreamUtil:
         return self.stream.tell()
 
     def seek(self, offset, whence=0) -> None:
-        origin=self.tell()
+        origin = self.tell()
         self.stream.seek(offset, whence)
         if whence == io.SEEK_CUR:
             self._pbar.update(int(offset))
         elif whence == io.SEEK_SET:
             self._pbar.update(int(offset - origin))
+
     def size(self) -> int:
         """Total size of StreamUtil's stream"""
         if isinstance(self.stream, io.BytesIO):
@@ -84,9 +89,9 @@ class StreamUtil:
             return self.stream.size()
         else:
             pos = self.tell()
-            self.stream.seek(0, io.SEEK_END) # Don't update the pbar
+            self.stream.seek(0, io.SEEK_END)  # Don't update the pbar
             size = self.tell()
-            self.stream.seek(pos) # Don't update the pbar
+            self.stream.seek(pos)  # Don't update the pbar
             return size
 
     def getValue(self) -> bytes:
@@ -105,7 +110,7 @@ class StreamUtil:
             except:
                 raise ValueError("Stream not supported")
 
-    def remainSize(self) -> int:
+    def remainingSize(self) -> int:
         return self.size() - self.tell()
 
     def atEnd(self):

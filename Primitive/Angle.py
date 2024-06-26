@@ -5,8 +5,7 @@ class Angle:
     """
     This class is modified from BadgerRLSystem's C++ class
     At:
-    https://github.com/bhuman/BHumanCodeRelease
-    Src/Libs/MathBase/Angle
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/MathBase/Angle.h
     """
 
     def __init__(self, angle=0.0):

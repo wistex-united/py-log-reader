@@ -44,27 +44,3 @@ class Annotation(DataClass):
             "name": self.name,
             "annotation": self.annotation,
         }
-
-    """Deprecated: Instantiation method on dynamicly generated classes"""
-    # @classmethod
-    # def getReadInstructions(cls):
-    #     """
-    #     The way annotation is read is not consistent with other dataclasses, so we cannot use the universal way to read it
-    #     This is just a method to satisfy Interface Requirement, don't use it directly
-    #     """
-    #     # The way annotation is read is not consistent with other dataclasses, so we cannot use the universal way to read it
-    #     return [
-    #         (UInt, 1),  # annotationNumber
-    #         (UInt, 1),  # frame
-    #     ]
-
-    # @classmethod
-    # def distributeReadResult(cls, result) -> "Annotation":
-    #     """
-    #     The way annotation is read is not consistent with other dataclasses, so we cannot use the universal way to read it
-    #     This is just a method to satisfy Interface Requirement, don't use it directly
-    #     """
-    #     instance = cls()
-    #     instance.annotationNumber = result[0]
-    #     instance.frame = result[1]
-    #     return instance

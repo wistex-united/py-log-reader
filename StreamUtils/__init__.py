@@ -1,1 +1,2 @@
-from .StreamUtil import ReadInstruction, StreamAble, StreamUtil
+from .StreamUtil import (AbsoluteByteIndex, ReadInstruction, StreamAble,
+                         StreamUtil, SutilCursor)

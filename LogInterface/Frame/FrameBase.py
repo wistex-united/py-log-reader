@@ -1,23 +1,19 @@
 import ast
-import csv
 import os
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
-import numpy as np
-from numpy.typing import NDArray
 from PIL import PngImagePlugin
 
 from StreamUtils import StreamUtil
 from Utils import dumpJson
-from Utils.GeneralUtils import countLines
 
 from ..Chunk import Chunk
 from ..DataClasses import Timer
 from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceBaseClass
-from ..Message import MessageAccessor, MessageInstance, Messages
+from ..Message import MessageAccessor, MessageBase, MessageInstance, Messages
 
 
 class FrameBase(LogInterfaceBaseClass):
@@ -57,21 +53,22 @@ class FrameBase(LogInterfaceBaseClass):
                 return True
 
     @abstractmethod  # Children class need to implement the int case seperately
-    def __getitem__(self, key: Union[str, Enum]) -> "FrameBase":
+    def __getitem__(self, key: Union[str, Enum]) -> MessageBase:
         """
         Allow to use [<message idx>/<message name>/<message id enum>] to access a message in the frame
         Special case for "Annotation": There might be multiple Annotations in a frame, so please use frame["Annotations"] or frame.Annotations to get them
         """
-        result = self.log.getCachedInfo(self, key)
-        if result is not None:
-            return result
+        result = None
+        if self.isAccessorClass:
+            result = self.log.getCachedInfo(self, key)
+            if result is not None:
+                return result
 
         if key == "Annotation" or key == self.log.MessageID["idAnnotation"]:
             raise Exception(
                 "There might be multiple Annotations in a frame, please use frame.Annotations to get them"
             )
         elif isinstance(key, str) or isinstance(key, Enum):
-            result = None
             for message in self.messages:
                 if (
                     message.className == key
@@ -83,7 +80,9 @@ class FrameBase(LogInterfaceBaseClass):
             if result is None:
                 raise KeyError(f"Message with key: {key} not found")
             else:
-                self.log.cacheInfo(self, key, result)
+                if result.isAccessorClass:
+                    result = result.copy()
+                    self.log.cacheInfo(self, key, result.copy().freeze())
                 return result
         else:
             raise KeyError("Invalid key type")
@@ -228,12 +227,14 @@ class FrameBase(LogInterfaceBaseClass):
 
     @property
     def Annotations(self) -> Messages:
-        """Get all the Annotation messages in this frame"""
+        """
+        Get all the Annotation messages in this frame
+        You cannot access annotation elsewhere because it is the only kind of
+        message that might appear multiple times in a frame
+        """
         if isinstance(self.children, LogInterfaceAccessorClass):
             annotationMap: list[int] = []
             for message in self.messages:
-                print(message.indexCursor)
-                print(message._iterStart_cache)
                 if message.className == "Annotation":
                     annotationMap.append(message.absIndex)
             result: MessageAccessor = self.children.copy()  # type: ignore
@@ -262,17 +263,13 @@ class FrameBase(LogInterfaceBaseClass):
 
     # Derived Properties
     @property
+    @abstractmethod
     def classNames(self) -> List[str]:
-        """The representation class's name of the messages in this frame"""
-        result = self.log.getCachedInfo(self, "classNames")
-        if result is not None:
-            pass
-        else:
-            result = []
-            for message in self.messages:
-                result.append(message.className)
-            self.log.cacheInfo(self, "classNames", result)
-        return result
+        """List of representation in this frame"""
+
+    @property
+    def representationNames(self) -> List[str]:
+        return self.classNames
 
     @property
     def numMessages(self) -> int:

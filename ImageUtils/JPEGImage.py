@@ -11,6 +11,13 @@ from .Image import Image as ImageBase
 
 
 class JPEGImage(ImageBase, DataClass):
+    """
+    The compressed YUYV image, usually used by log of real robots
+
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Representations/Infrastructure/JPEGImage.h
+    """
     maxResolutionWidth = 1280
     maxResolutionHeight = 960
     readOrder = ["width", "height", "timestamp"]
@@ -88,23 +95,3 @@ class JPEGImage(ImageBase, DataClass):
                 return
             else:
                 raise Exception("Failed to save image")
-
-    """Deprecated: Instantiation method on dynamicly generated classes"""
-    # @classmethod
-    # def getReadInstructions(cls):
-    #     """Read Instructions does support dynamic length, so this instruction would only read the width, height and timestamp, leaving the image bytes unread"""
-    #     return [
-    #         (UInt, 1),  # width
-    #         (UInt, 1),  # height
-    #         (UInt, 1),  # timestamp
-    #         (UInt, 1),  # size
-    #     ]
-
-    # @classmethod
-    # def distributeReadResult(cls, result) -> "JPEGImage":
-    #     instance = cls()
-    #     instance.width = result[0]
-    #     instance.height = result[1]
-    #     instance.timestamp = result[2]
-    #     instance.size = result[3]
-    #     return instance

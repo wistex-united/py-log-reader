@@ -26,6 +26,11 @@ scaledGCoeffV = int((yCoeffR / (yCoeffG * vCoeff)) * (1 << scaleExponent))
 
 
 class PixelBase(ABC):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     @property
     @abstractmethod
     def size(self):
@@ -33,6 +38,11 @@ class PixelBase(ABC):
 
 
 class RGBPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 4
 
     def __init__(self, raw: bytes):
@@ -57,6 +67,11 @@ class RGBPixel(PixelBase):
 
 
 class BGRAPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 4  # Size of the tuple
 
     def __init__(self, raw: bytes):
@@ -95,6 +110,11 @@ class BGRAPixel(PixelBase):
 
 
 class YUYVPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 4  # Y0, U, Y1, V for two pixels
 
     def __init__(self, raw: bytes):
@@ -138,6 +158,11 @@ class YUYVPixel(PixelBase):
 
 
 class YUVPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 4  # padding, U, Y, V
 
     def __init__(self, raw: Union[bytes, Tuple[int, int, int, int]]):
@@ -175,6 +200,11 @@ class YUVPixel(PixelBase):
 
 
 class HSIPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 4  # padding, H, S, I
 
     def __init__(self, raw: bytes):
@@ -199,6 +229,11 @@ class HSIPixel(PixelBase):
 
 
 class GrayscaledPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 1
 
     def __init__(self, hue=0):
@@ -210,6 +245,11 @@ class GrayscaledPixel(PixelBase):
 
 
 class HuePixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 1  # Only one byte for the hue value
 
     def __init__(self, hue=0):
@@ -242,6 +282,11 @@ class HuePixel(PixelBase):
 
 
 class Edge2Pixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 2
 
     def __init__(self, e1=0, e2=0):
@@ -253,6 +298,11 @@ class Edge2Pixel(PixelBase):
 
 
 class BinaryPixel(PixelBase):
+    """
+    This class is modified from BadgerRLSystem's C++ class
+    At:
+    https://github.com/bhuman/BHumanCodeRelease/blob/master/Src/Libs/ImageProcessing/PixelTypes.h
+    """
     size: int = 1
 
     def __init__(self, val=0):
