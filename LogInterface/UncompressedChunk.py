@@ -1,10 +1,10 @@
 import asyncio
 import csv
 import io
-from mailbox import Message
 import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from mailbox import Message
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -12,7 +12,6 @@ from typing import Dict, List, Optional
 import numpy as np
 from tqdm import tqdm
 
-from .LogInterfaceBase import IndexMap
 from Primitive.PrimitiveDefinitions import UChar
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
@@ -20,6 +19,7 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass, Stopwatch, Timer
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
+from .LogInterfaceBase import IndexMap
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 
 SutilCursor = int

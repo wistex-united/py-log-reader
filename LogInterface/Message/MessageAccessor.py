@@ -1,5 +1,5 @@
-from importlib import import_module
 import os
+from importlib import import_module
 from typing import Any, Dict, List, Optional, Tuple
 
 from Primitive import *
@@ -8,12 +8,9 @@ from Utils import MemoryMappedFile
 from Utils.GeneralUtils import canBeRange
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (
-    IndexMap,
-    LogInterfaceBaseClass,
-    LogInterfaceAccessorClass,
-    LogInterfaceInstanceClass,
-)
+from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                                LogInterfaceBaseClass,
+                                LogInterfaceInstanceClass)
 from .MessageBase import MessageBase
 from .MessageInstance import MessageInstance
 

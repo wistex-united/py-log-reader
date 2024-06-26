@@ -1,7 +1,7 @@
-from collections import OrderedDict
 import csv
 import io
 import os
+from collections import OrderedDict
 from enum import Enum, auto
 from mmap import mmap
 from pathlib import Path
@@ -15,14 +15,11 @@ from Utils import MemoryMappedFile
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
-from .Frame import FrameBase, FrameInstance, FrameAccessor, Frames
-from .LogInterfaceBase import (
-    LogInterfaceBaseClass,
-    LogInterfaceAccessorClass,
-    LogInterfaceInstanceClass,
-    IndexMap,
-)
-from .Message import MessageBase, MessageInstance, MessageAccessor, Messages
+from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
+from .LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                               LogInterfaceBaseClass,
+                               LogInterfaceInstanceClass)
+from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
 from .TypeInfoChunk import TypeInfoChunk as TChunk

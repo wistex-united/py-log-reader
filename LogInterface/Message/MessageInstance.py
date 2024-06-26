@@ -6,7 +6,8 @@ from Primitive import *
 from StreamUtils import StreamUtil
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceInstanceClass
+from ..LogInterfaceBase import (LogInterfaceAccessorClass,
+                                LogInterfaceInstanceClass)
 from .MessageBase import MessageBase
 
 

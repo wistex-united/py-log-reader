@@ -5,6 +5,7 @@ from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
+
 import numpy as np
 from numpy.typing import NDArray
 from PIL import PngImagePlugin

@@ -1,17 +1,18 @@
 import csv
+import linecache
 import os
+import tracemalloc
 from pathlib import Path
 from typing import List
-import linecache
 
-import tqdm, psutil, tracemalloc
-import tracemalloc
-from pympler import tracker, summary, muppy
+import psutil
+import tqdm
+from pympler import muppy, summary, tracker
+
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils import ObservationJosh
-from Utils import countLines, readLastLine, extractTrajNumbers
+from Utils import ObservationJosh, countLines, extractTrajNumbers, readLastLine
 
 
 def start_tracing():

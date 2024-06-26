@@ -26,6 +26,8 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 class SpecialEncoder(json.JSONEncoder):
+    """Handle some special object that might be presented in Representation Object and TypeInfoChunk"""
+
     FORMAT_SPEC = "@@{}@@"
     regex = re.compile(FORMAT_SPEC.format(r"(\d+)"))
 

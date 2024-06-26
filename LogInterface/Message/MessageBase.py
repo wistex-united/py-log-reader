@@ -1,10 +1,10 @@
-from enum import Enum
 import functools
 import io
 import os
 import pickle
 import re
 from abc import abstractmethod
+from enum import Enum
 from mmap import ACCESS_READ, mmap
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
