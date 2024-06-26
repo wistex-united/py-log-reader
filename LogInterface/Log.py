@@ -16,12 +16,9 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import (
-    IndexMap,
-    LogInterfaceAccessorClass,
-    LogInterfaceBaseClass,
-    LogInterfaceInstanceClass,
-)
+from .LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                               LogInterfaceBaseClass,
+                               LogInterfaceInstanceClass)
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk

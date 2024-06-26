@@ -8,12 +8,9 @@ from Utils import MemoryMappedFile
 from Utils.GeneralUtils import canBeRange
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (
-    IndexMap,
-    LogInterfaceAccessorClass,
-    LogInterfaceBaseClass,
-    LogInterfaceInstanceClass,
-)
+from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                                LogInterfaceBaseClass,
+                                LogInterfaceInstanceClass)
 from .MessageBase import MessageBase
 from .MessageInstance import MessageInstance
 

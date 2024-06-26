@@ -1,25 +1,14 @@
 import csv
-import linecache
-import os
 import tracemalloc
-from pathlib import Path
 from typing import List
 
-import psutil
 import tqdm
-from pympler import muppy, summary, tracker
 
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils import (
-    ObservationJosh,
-    countLines,
-    displayTopMemoryConsumers,
-    extractTrajNumbers,
-    readLastLine,
-    startMemoryTracing,
-)
+from Utils import (ObservationJosh, countLines, displayTopMemoryConsumers,
+                   extractTrajNumbers, readLastLine, startMemoryTracing)
 
 
 def checkPointCallback(cnt):
@@ -34,8 +23,9 @@ def main():
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("traj9_bh.log")
-    LOG.readLogFile("t.log")
-    LOG.eval(forceReEval=True)
+    LOG.readLogFile("Reference.log")
+    LOG.eval()
+    # LOG.eval(isLogFileLarge=True)
 
     # Dump all the representations into json and jpg images
     LOG.parseBytes()
@@ -46,6 +36,7 @@ def main():
         frame.saveImageWithMetaData(slientFail=True)
     return
 
+    # Sample of how I recover trajectories
     OBS = ObservationJosh("WalkToBall")
     index = 0
 
@@ -206,51 +197,16 @@ def main():
                 else:
                     raise Exception(f"Unknown state: {state}")
                 prev_state = state
-            except KeyError as e:
+            except (
+                KeyError
+            ) as e:  # This is normal, some frame simply doesn't have enough information
                 print(f"KeyError: {e} at frame {frame.absIndex}")
             except AssertionError as e:
                 print(f"AssertionError: {e} at frame {frame.absIndex}")
-            except Exception as e:
+            except Exception as e:  # Just to add some robusty
                 print(f"Exception: {e} at frame {frame.absIndex}")
                 raise
 
-            # if len(frame.dummyMessages)!=0:
-            #     print(1)
-        # print(collisions)
 
-    # obs, acts, infos, next_obs, dones = map(np.array, zip(*transitions))
-    # np.savez(
-    #     f"{Path(LOG.logFilePath).stem}/transitions.npz",
-    #     obs=obs,
-    #     acts=acts,
-    #     infos=infos,
-    #     next_obs=next_obs,
-    #     dones=dones,
-    # )
-
-    # obs, acts, infos, rewards, terminate(bool)
-
-    # imitationLearningTransitions=Transitions(obs, acts, infos, next_obs, dones)
-
-
-# profiler = cProfile.Profile()
-# # Start profiling
-# profiler.enable()
-
-# # Code you want to profile
 main()
 print("Done")
-# # Stop profiling
-# profiler.disable()
-# # Create a Stats object
-# stats = pstats.Stats(profiler).sort_stats("cumulative")
-# # Print the stats
-# # stats.print_stats()
-
-# # Optionally, you can save the stats to a file
-# stats.dump_stats("profile_stats.prof")
-# Load the stats
-# loaded_stats = pstats.Stats("profile_stats.prof")
-
-# Print the stats
-# loaded_stats.strip_dirs().sort_stats("cumulative").print_stats()

@@ -7,12 +7,9 @@ import numpy as np
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (
-    IndexMap,
-    LogInterfaceAccessorClass,
-    LogInterfaceBaseClass,
-    LogInterfaceInstanceClass,
-)
+from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                                LogInterfaceBaseClass,
+                                LogInterfaceInstanceClass)
 from ..Message import MessageAccessor, MessageBase, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance

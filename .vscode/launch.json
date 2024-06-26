@@ -8,11 +8,10 @@
             "name": "Python Debugger: Current File with Arguments",
             "type": "debugpy",
             "request": "launch",
-            "program": "LogReader.py",
+            "program": "${workspaceFolder}/LogReaderSample.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "subProcess": true,
-            // "args": "${command:pickArgs}"
         }
     ]
 }

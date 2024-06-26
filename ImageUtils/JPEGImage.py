@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 from PIL.Image import fromarray, open
 
-from Primitive import *
 from LogInterface import DataClass
+from Primitive import *
 from StreamUtils import StreamUtil
 
 from .Image import Image as ImageBase

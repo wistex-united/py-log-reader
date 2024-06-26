@@ -16,7 +16,7 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass, Stopwatch, Timer
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import LogInterfaceAccessorClass, IndexMap
+from .LogInterfaceBase import IndexMap, LogInterfaceAccessorClass
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 
 
