@@ -5,6 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
 from PIL import PngImagePlugin
 
 from StreamUtils import StreamUtil
@@ -169,12 +170,24 @@ class FrameBase(LogInterfaceBaseClass):
             if self["MotionRequest"]["alignPrecisely"].value == 0:
                 alignPreciselyModified = 1
             elif self["MotionRequest"]["alignPrecisely"].value == 1:
-                alignPreciselyModified = 0
+                alignPreciselyModified = -1
             elif self["MotionRequest"]["alignPrecisely"].value == 2:
-                alignPreciselyModified = 0.5
+                alignPreciselyModified = 0
+            else:
+                raise ValueError("Unknown align type")
+            valuedKickType = self["MotionRequest"]["kickType"]
+            if valuedKickType.name.lower().find("left") != -1:
+                valuedKickType = -1.0
+            elif valuedKickType.name.lower().find("right") != -1:
+                valuedKickType = 1.0
+            else:
+                raise ValueError("Kick Type not left or right")
+
+            kickLength = self["MotionRequest"]["kickLength"]
+            kickLength = -1 if kickLength > 10e7 else kickLength
             kickBasics = (
-                self["MotionRequest"]["kickType"].name,
-                int(self["MotionRequest"]["kickLength"]),
+                valuedKickType,
+                float(kickLength),
                 float(alignPreciselyModified),
             )
         except:
@@ -245,7 +258,7 @@ class FrameBase(LogInterfaceBaseClass):
                 return []
             result.indexMap = annotationMap  # type: ignore
             return result
-        elif isinstance(self.children, list):
+        elif isinstance(self.children, list) or isinstance(self.children, np.ndarray):
             result: list[MessageInstance] = []
             for message in self.messages:
                 if message.className == "Annotation":

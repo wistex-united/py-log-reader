@@ -5,10 +5,12 @@ from mmap import mmap
 from pathlib import Path
 from typing import Any, List, Union
 
+import numpy as np
+
 from StreamUtils import StreamUtil
 from Utils import SpecialEncoder
 
-IndexMap = Union[range, List[int]]
+IndexMap = Union[range, List[int], np.ndarray]
 
 
 class LogInterfaceBaseClass(ABC):

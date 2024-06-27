@@ -7,12 +7,9 @@ import numpy as np
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (
-    IndexMap,
-    LogInterfaceAccessorClass,
-    LogInterfaceBaseClass,
-    LogInterfaceInstanceClass,
-)
+from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
+                                LogInterfaceBaseClass,
+                                LogInterfaceInstanceClass)
 from ..Message import MessageAccessor, MessageBase, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
@@ -22,7 +19,7 @@ Frames = Union[List[FrameInstance], "FrameAccessor"]
 
 class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
     @staticmethod
-    def decodeIndexBytes(bytes: bytes) -> Tuple[int, str, int, int]:
+    def decodeIndexBytes(bytes: Union[bytes, bytearray]) -> Tuple[int, str, int, int]:
         if len(bytes) != FrameAccessor.frameIdxByteLength:
             raise ValueError(f"Invalid index bytes length: {len(bytes)}")
         return (
@@ -84,7 +81,13 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
         """
         [frameIndex, threadName, startMessageIndex, endByteMessageIndex]
         """
-        return self.decodeIndexBytes(self.indexFileBytes)
+        result = self.log.getCachedInfo(self, "frameByteIndex")
+        if result is not None:
+            return result
+
+        result = self.decodeIndexBytes(self.indexFileBytes)
+        self.log.cacheInfo(self, "frameByteIndex", result)
+        return result
 
     @property
     def indexFileBytes(self) -> bytes:

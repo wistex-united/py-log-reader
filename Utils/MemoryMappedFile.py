@@ -30,7 +30,6 @@ class MemoryMappedFile:
             file.close()  # Close the file descriptor since mmap keeps its own reference
         else:
             raise OSError(f"File {self.filename} does not exist.")
-            exit(-1)
 
     def __del__(self):
         if hasattr(self, "mmap") and self.mmap:

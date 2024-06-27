@@ -1,10 +1,14 @@
 """
 Tool functions set. All the function will be exposed in Utils package
 """
+
+import cProfile
 import json
 import mmap
 import os
+import pstats
 import re
+import sys
 from typing import List, Optional, Tuple, Union
 
 from numpy.typing import NDArray
@@ -188,3 +192,30 @@ def extractTrajNumbers(folderPath):
             numbers.append(int(match.group(1)))
 
     return sorted(numbers)
+
+
+def profileFunction(func, args=(), kwargs={}, profileFile="profile_result.prof"):
+    """
+    Profiles the time consumption of the given function and dumps the profile result to a file.
+
+    Args:
+        func (callable): The function to profile.
+        args (tuple): Positional arguments to pass to the function.
+        kwargs (dict): Keyword arguments to pass to the function.
+        profileFile (str): The file to dump the profile result.
+    """
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        func(*args, **kwargs)
+    finally:
+        profiler.disable()
+        print("Profile Result: ")
+        print("Profile Result: ")
+        stats = pstats.Stats(profiler, stream=sys.stdout)
+        stats.sort_stats(pstats.SortKey.TIME)
+        stats.print_stats()
+        with open(profileFile, "w") as f:
+            stats = pstats.Stats(profiler, stream=f)
+            stats.sort_stats(pstats.SortKey.TIME)
+            stats.print_stats()

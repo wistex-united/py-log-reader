@@ -22,7 +22,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
     maxCachedReprObj: int = 200
 
     @staticmethod
-    def decodeIndexBytes(bytes: bytes) -> Tuple[int, int, int, int]:
+    def decodeIndexBytes(bytes: Union[bytes, bytearray]) -> Tuple[int, int, int, int]:
         if len(bytes) != MessageAccessor.messageIdxByteLength:
             raise ValueError(f"Invalid index bytes length: {len(bytes)}")
         parsedBytes = np.frombuffer(
@@ -105,7 +105,13 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
         """
         [messageIndex, parentFrameIndex, startByte, endByte]
         """
-        return self.decodeIndexBytes(self.indexFileBytes)
+        result = self.log.getCachedInfo(self, "messageByteIndex")
+        if result is not None:
+            return result
+
+        result = self.decodeIndexBytes(self.indexFileBytes)
+        self.log.cacheInfo(self, "messageByteIndex", result)
+        return result
 
     @property
     def frameIndex(self) -> int:

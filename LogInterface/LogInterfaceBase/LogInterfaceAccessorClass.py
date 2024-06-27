@@ -5,6 +5,8 @@ from mmap import mmap
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
+import numpy as np
+
 from Utils import MemoryMappedFile
 
 from .LogInterfaceBase import IndexMap, LogInterfaceBaseClass
@@ -98,7 +100,9 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         if isinstance(key, self.__class__):
             if isinstance(self.indexMap, range):
                 return key in self.indexMap
-            elif isinstance(self.indexMap, list):
+            elif isinstance(self.indexMap, list) or isinstance(
+                self.indexMap, np.ndarray
+            ):
                 index = bisect.bisect_left(self.indexMap, key.absIndex)
                 return index < len(self.indexMap)
             raise ValueError("Invalid indexMap")
@@ -144,6 +148,9 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
             raise ValueError("Empty index map")
         elif isinstance(value, list):
             self._indexMap = sorted(value)
+        elif isinstance(value, np.ndarray):
+            self._indexMap = value.copy()
+            np.sort(self._indexMap)
         elif isinstance(value, range):
             self._indexMap = value
         else:
@@ -274,7 +281,7 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
         if indexMap is None:
             indexMap = self.indexMap
 
-        if isinstance(indexMap, list):
+        if isinstance(indexMap, list) or isinstance(indexMap, np.ndarray):
             index = bisect.bisect_left(indexMap, absIndex)
             if index != len(indexMap) and indexMap[index] == absIndex:
                 return index

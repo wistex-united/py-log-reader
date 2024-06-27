@@ -1,12 +1,18 @@
 import asyncio
 import csv
+import functools
 import os
+import threading
+import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
+from threading import Lock, Thread
 from typing import Dict, List, Optional
 
+import numpy as np
 from tqdm import tqdm
 
 from Primitive.PrimitiveDefinitions import UChar
@@ -33,7 +39,20 @@ class UncompressedChunk(Chunk):
 
         # cached index of messages and data objects
         self._messages_cached: Messages
-        self._reprs_cached: List[DataClass]
+
+        self._executor: ThreadPoolExecutor
+        self._lock: Lock
+        self._postProcessorThread: Thread
+
+        # self._initExecutor()
+
+    def _initExecutor(self):
+        self._executor = ThreadPoolExecutor(max_workers=cpu_count())
+        self._futures = defaultdict(list)
+        self._lock = Lock()
+        self._postProcessorThread = Thread(target=self.fetchParsedMessages)
+        self._postProcessorThread.daemon = True
+        self._postProcessorThread.start()
 
     @property
     def frames(self) -> Frames:
@@ -146,6 +165,10 @@ class UncompressedChunk(Chunk):
                 threadIndexMaps[frame.threadName] = [index]
             else:
                 threadIndexMaps[frame.threadName].append(index)
+        for threadName, indexes in threadIndexMaps.items():
+            threadIndexMaps[frame.threadName] = np.array(
+                threadIndexMaps[frame.threadName]
+            )
         for threadName, indexes in threadIndexMaps.items():
             self._threads[threadName] = FrameAccessor(self.log, indexes)
         self._startByte = offset
@@ -279,6 +302,41 @@ class UncompressedChunk(Chunk):
             asyncio.get_event_loop().run_until_complete(
                 self.dumpReprs(results, unparsed)
             )
+
+    # background parsing
+    @property
+    @functools.lru_cache(maxsize=1)
+    def parseBytesWrapper(self):
+        return partial(MessageBase.parseBytesWrapper, logFilePath=self.logFilePath)
+
+    def submitJob(self, message: MessageAccessor):
+        future = self._executor.submit(
+            self.parseBytesWrapper,
+            message.startByte + 4,
+            message.endByte,
+            message.classType.read,
+        )
+        with self.lock:
+            self._futures[message.absIndex] = future
+
+    def fetchParsedMessages(self):
+        while True:
+            with self._lock:
+                finishedFutures = []
+                for messageAbsIdx, future in self._futures.items():
+                    if future.done():
+                        result = future.result()
+                        # message.reprObj = result
+                        # if isinstance(result, Stopwatch):
+                        #     frameTmp = message.frame
+                        #     frameTmp.timer.parseStopwatch(result, frameTmp.index)
+                        self.log.writeCacheInfo(
+                            "Message", "reprObj", messageAbsIdx, result
+                        )
+                        finishedFutures.append(messageAbsIdx)
+                for messageAbsIdx in finishedFutures:
+                    del self._futures[messageAbsIdx]
+            # time.sleep(1)  # Adding a small delay to prevent high CPU usage
 
     # Index file Validation
     @classmethod
@@ -575,6 +633,7 @@ class UncompressedChunk(Chunk):
                     thread.log = self
                 else:
                     pass  # Probably list of Frame Instance, they are in _children list and parent alredy set
+        # self._initExecutor()
 
     @property
     def providedAttributes(self) -> List[str]:

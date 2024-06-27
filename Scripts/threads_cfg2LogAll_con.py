@@ -3,6 +3,7 @@
 import json
 import re
 
+
 def convertToJson(inputText):
     inputText = re.sub(r"^\s*//.*\n", "", inputText, flags=re.MULTILINE)
 
