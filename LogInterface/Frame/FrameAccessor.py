@@ -59,6 +59,12 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
             self.log.cacheInfo(self, key, result.copy().freeze())
             return result
 
+    def __contains__(self, key: Union[str, Enum, "FrameAccessor"]) -> bool:
+        if isinstance(key, FrameAccessor):
+            return LogInterfaceAccessorClass.__contains__(self, key)
+        else:
+            return FrameBase.__contains__(self, key)
+
     # Core
     @property
     def startByte(self) -> int:

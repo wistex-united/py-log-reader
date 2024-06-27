@@ -94,6 +94,17 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
                 else:
                     pass
 
+    def __contains__(self, key: "LogInterfaceAccessorClass") -> bool:
+        if isinstance(key, self.__class__):
+            if isinstance(self.indexMap, range):
+                return key in self.indexMap
+            elif isinstance(self.indexMap, list):
+                index = bisect.bisect_left(self.indexMap, key.absIndex)
+                return index < len(self.indexMap)
+            raise ValueError("Invalid indexMap")
+        else:
+            return False
+
     # Core
     @property
     def log(self) -> Any:
@@ -168,7 +179,7 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     @functools.lru_cache(maxsize=1000)
     def getBytesFromMmap(idxFile: mmap, indexStart: int, indexEnd: int) -> bytes:
         return idxFile[indexStart:indexEnd]
-    
+
     @property
     def indexCursor(self) -> int:
         return self._indexCursor
@@ -285,9 +296,10 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     def isAccessorClass(self) -> bool:
         return True
 
-    def freeze(self) -> None:
+    def freeze(self) -> "LogInterfaceAccessorClass":
         """
         Freeze the object's absIndex (if it is a iterator, it won't be able to move anymore)
         NOTE: copy() will not copy frozen state
         """
         self._frozen = True
+        return self

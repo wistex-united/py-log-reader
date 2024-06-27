@@ -568,6 +568,13 @@ class UncompressedChunk(Chunk):
 
     def __setstate__(self, state):
         super().__setstate__(state)
+        # The Acceesors in theads need to be assigned manually
+        if hasattr(self, "_threads"):
+            for threadName, thread in self._threads.items():
+                if isinstance(thread, LogInterfaceAccessorClass):
+                    thread.log = self
+                else:
+                    pass  # Probably list of Frame Instance, they are in _children list and parent alredy set
 
     @property
     def providedAttributes(self) -> List[str]:

@@ -107,6 +107,6 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     def isAccessorClass(self) -> bool:
         return False
 
-    def freeze(self) -> None:
+    def freeze(self) -> "LogInterfaceInstanceClass":
         """Currently the instance class is freezed by default"""
-        pass
+        return self

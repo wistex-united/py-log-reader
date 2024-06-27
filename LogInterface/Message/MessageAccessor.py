@@ -61,6 +61,12 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
         return result
 
+    def __contains__(self, key: Union[str, "MessageAccessor"]) -> bool:
+        if isinstance(key, MessageAccessor):
+            return LogInterfaceAccessorClass.__contains__(self, key)
+        else:
+            return MessageBase.__contains__(self, key)
+
     # Core Properties
     @property
     def logId(self) -> UChar:

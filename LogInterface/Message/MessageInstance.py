@@ -48,10 +48,11 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
         Don't care whether it is a dummy message or has invalid id, upper level eval (Frame.eval) will handle that
         """
         startPos = sutil.tell()
-        try:
-            id, size = sutil.readMessageHeader()
+        # try:
+        id, size = sutil.readMessageHeader()
+        if size < sutil.remainingSize():
             sutil.seek(size, io.SEEK_CUR)
-        except EOFError:
+        else:
             sutil.seek(
                 startPos, io.SEEK_SET
             )  # Set the stream back to avoid misreporting startByte and endByte

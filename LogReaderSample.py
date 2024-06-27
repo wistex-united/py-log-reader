@@ -1,4 +1,5 @@
 import csv
+import os
 import tracemalloc
 from typing import List
 
@@ -28,19 +29,19 @@ def main():
     startMemoryTracing()
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
-    # LOG.readLogFile("traj9_bh.log")
-    LOG.readLogFile("Reference.log")
-    LOG.eval()
-    # LOG.eval(isLogFileLarge=True)
+    # LOG.readLogFile("Reference.log")
+    LOG.readLogFile("traj12_formal.log")
+    # LOG.eval()
+    LOG.eval(isLogFileLarge=True)
 
     # Dump all the representations into json and jpg images
-    LOG.parseBytes()
-    # for frame in tqdm.tqdm(LOG.frames):
-    #     if frame.hasImage:
-    #         frame.saveImageWithMetaData()
-    #     frame.saveFrameDict()
-    #     frame.saveImageWithMetaData(slientFail=True)
-    # return
+    # LOG.parseBytes()
+    for frame in tqdm.tqdm(LOG.frames):
+        if frame.hasImage:
+            frame.saveImageWithMetaData()
+        frame.saveFrameDict()
+        frame.saveImageWithMetaData(slientFail=True)
+    return
 
     # Sample of how I recover trajectories
     OBS = ObservationJosh("WalkToBall")
@@ -53,8 +54,16 @@ def main():
 
     lastCsvFrame = 0
     lastTrajFrame = 0
+
+    csvLine = 0
     if LOG.outputDir.exists():
         csvLine = countLines(LOG.outputDir / "data.csv")
+
+        if csvLine == 1:  # Only title line
+            with open(LOG.outputDir / "data.csv", "w") as f:
+                print("Only title line found in csv, recreate it")
+                pass
+            csvLine = 0
 
         if csvLine != 0:
             lastCsvLine = readLastLine(LOG.outputDir / "data.csv").split(",")
@@ -71,6 +80,13 @@ def main():
     ContinuePos = min(lastCsvFrame, lastTrajFrame)
 
     print(f"Continue from {ContinuePos}")
+
+    if not (LOG.outputDir / "data.csv").exists():
+        os.makedirs(LOG.outputDir)
+        with open(LOG.outputDir / "data.csv", "w") as f:
+            print("Create csv")
+            pass
+
     with open(LOG.outputDir / "data.csv", "a") as f:
         writer = csv.writer(f)
         if csvLine == 0:
@@ -209,6 +225,8 @@ def main():
                 print(f"KeyError: {e} at frame {frame.absIndex}")
             except AssertionError as e:
                 print(f"AssertionError: {e} at frame {frame.absIndex}")
+                print(str(frame))
+                exit(1)
             except Exception as e:  # Just to add some robusty
                 print(f"Exception: {e} at frame {frame.absIndex}")
                 raise

@@ -175,7 +175,7 @@ class FrameBase(LogInterfaceBaseClass):
             kickBasics = (
                 self["MotionRequest"]["kickType"].name,
                 int(self["MotionRequest"]["kickLength"]),
-                alignPreciselyModified,
+                float(alignPreciselyModified),
             )
         except:
             return None
