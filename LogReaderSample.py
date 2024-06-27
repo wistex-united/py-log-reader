@@ -7,8 +7,14 @@ import tqdm
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils import (ObservationJosh, countLines, displayTopMemoryConsumers,
-                   extractTrajNumbers, readLastLine, startMemoryTracing)
+from Utils import (
+    ObservationJosh,
+    countLines,
+    displayTopMemoryConsumers,
+    extractTrajNumbers,
+    readLastLine,
+    startMemoryTracing,
+)
 
 
 def checkPointCallback(cnt):
@@ -127,40 +133,40 @@ def main():
                         OBS.ballInGoalArea(ballLoc),
                         0,
                     )
-                    acts = None
+                    act = None
 
-                    if acts is None:
-                        acts = [
+                    if act is None:
+                        act = [
                             *frame.motionBasics,
                             *frame.kickBasics,
                             # -7,  # stand
                         ]
 
-                    if acts is None:
+                    if act is None:
                         raise Exception("acts is None")
                     frame.threadIndex
                     prev_state = state
 
-                    infos = {
+                    info = {
                         "frameIndex": frame.absIndex,
                         "agentLoc": agentLoc,
                         "ballLoc": ballLoc,
-                        "robotSpeedX": acts[0],
-                        "robotSpeedY": acts[1],
-                        "robotSpeedRot": acts[2],
-                        "kickType": acts[3],
-                        "kickLength": acts[4],
-                        "alignPreciselyModified": acts[5],
+                        "robotSpeedX": act[0],
+                        "robotSpeedY": act[1],
+                        "robotSpeedRot": act[2],
+                        "kickType": act[3],
+                        "kickLength": act[4],
+                        "alignPreciselyModified": act[5],
                         "rollOutResult": frame.rollOutResult,
                         "jsonFile": frame.jsonName,
                     }
-                    line = list(infos.values())
+                    line = list(info.values())
                     if frame.absIndex > lastCsvFrame:
                         writer.writerow(line)
                     print(line)
                     # if prev_obs is not None:
                     #     transitions.append([prev_obs, acts, None, obs, False])
-                    transitions.append([obs, acts, infos, reward, False])
+                    transitions.append([obs, act, info, reward, False])
                     prevObs = obs
                     OBS.stepObservationHistory(obs)
 
@@ -182,15 +188,15 @@ def main():
                         last = transitions[-1]
                         last[4] = True
 
-                        obs, acts, infos, next_obs, dones = map(
+                        obs, act, info, rewards, dones = map(
                             np.array, zip(*transitions)
                         )
                         np.savez(
                             LOG.outputDir / f"traj_{frame.absIndex}.npz",
                             obs=obs,
-                            acts=acts,
-                            infos=infos,
-                            next_obs=next_obs,
+                            acts=act,
+                            infos=info,
+                            rewards=rewards,
                             dones=dones,
                         )
                         print(f"Saved {LOG.outputDir / f'traj_{frame.absIndex}.npz'}")
