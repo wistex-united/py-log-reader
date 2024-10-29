@@ -30,15 +30,15 @@ def main():
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("Reference.log")
-    LOG.readLogFile("traj12_formal.log")
+    LOG.readLogFile("neargoal.log")
     # LOG.eval()
     LOG.eval(isLogFileLarge=True)
 
     # Dump all the representations into json and jpg images
     # LOG.parseBytes()
-    for frame in tqdm.tqdm(LOG.frames):
-        if frame.hasImage:
-            frame.saveImageWithMetaData()
+    for frame in tqdm.tqdm(LOG.UncompressedChunk.thread("Cognition")):
+        # if frame.hasImage:
+        #     frame.saveImageWithMetaData()
         frame.saveFrameDict()
         frame.saveImageWithMetaData(slientFail=True)
     return
