@@ -16,9 +16,12 @@ from Utils import MemoryMappedFile
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                               LogInterfaceBaseClass,
-                               LogInterfaceInstanceClass)
+from .LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
@@ -302,19 +305,29 @@ class Log(LogInterfaceInstanceClass):
         return self._Info_cached[type][name][absIndex]
 
     def getMessageAccessor(
-        self, indexMap: Optional[IndexMap] = None
+        self, indexMap: Optional[IndexMap] = None, copyIndexMap=True
     ) -> MessageAccessor:
-        return MessageAccessor(self, indexMap)
+        return MessageAccessor(self, indexMap, copyIndexMap)
 
-    def getFrameAccessor(self, indexMap: Optional[IndexMap] = None) -> FrameAccessor:
-        return FrameAccessor(self, indexMap)
+    def getFrameAccessor(
+        self, indexMap: Optional[IndexMap] = None, copyIndexMap=True
+    ) -> FrameAccessor:
+        return FrameAccessor(self, indexMap, copyIndexMap)
 
     def getAccessorCopyOf(
         self, source: LogInterfaceBaseClass
     ) -> LogInterfaceAccessorClass:
         if isinstance(source, FrameBase):
             if isinstance(source, FrameAccessor):
-                result = self.getFrameAccessor(source.indexMap)
+                copyIndexMap = not (
+                    source.indexMap
+                    is self.UncompressedChunk.threadIndexMaps[source.threadName]
+                )
+                if not copyIndexMap:
+                    print("Find message accessor")
+
+                # This is a frame accessor
+                result = self.getFrameAccessor(source.indexMap, copyIndexMap)
             elif isinstance(source, FrameInstance):
                 result = self.getFrameAccessor()
             else:

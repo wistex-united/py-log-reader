@@ -6,8 +6,7 @@ from Primitive import *
 from StreamUtils import StreamUtil
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (LogInterfaceAccessorClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import LogInterfaceAccessorClass, LogInterfaceInstanceClass
 from .MessageBase import MessageBase
 
 
@@ -76,6 +75,11 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
         """The representation object"""
         if not hasattr(self, "_reprObject"):
             self.parseBytes()
+        if isinstance(self._reprObject, Stopwatch):
+            try:
+                self._reprObject = self.frame.timer.getStopwatch(self.frameIndex)
+            except:
+                pass
         return self._reprObject
 
     @reprObj.setter
@@ -101,12 +105,7 @@ class MessageInstance(MessageBase, LogInterfaceInstanceClass):
         if hasattr(self, "_reprDict_cached") and self._reprDict_cached:
             return self._reprDict_cached
         else:
-            if isinstance(self.reprObj, Stopwatch):
-                self._reprDict_cached = self.frame.timer.getStopwatch(
-                    self.frameIndex
-                ).asDict()
-            else:
-                self._reprDict_cached = self.reprObj.asDict()
+            self._reprDict_cached = self.reprObj.asDict()
             return self._reprDict_cached
 
     @property

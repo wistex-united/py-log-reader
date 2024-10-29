@@ -1,6 +1,5 @@
 import csv
 import os
-import tracemalloc
 from typing import List
 
 import tqdm
@@ -13,6 +12,7 @@ from Utils import (
     countLines,
     displayTopMemoryConsumers,
     extractTrajNumbers,
+    profileFunction,
     readLastLine,
     startMemoryTracing,
 )
@@ -21,8 +21,8 @@ from Utils import (
 def checkPointCallback(cnt):
     if cnt % 1000 == 0:
         print(f"Checkpoint: {cnt}")
-        snapshot = tracemalloc.take_snapshot()
-        displayTopMemoryConsumers(snapshot)
+        # snapshot = tracemalloc.take_snapshot()
+        # displayTopMemoryConsumers(snapshot)
 
 
 def main():
@@ -30,15 +30,21 @@ def main():
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("Reference.log")
-    LOG.readLogFile("traj12_formal.log")
+    LOG.readLogFile("1.log")
     # LOG.eval()
-    LOG.eval(isLogFileLarge=True)
+    LOG.eval(isLogFileLarge=False)
 
     # Dump all the representations into json and jpg images
-    # LOG.parseBytes()
-    for frame in tqdm.tqdm(LOG.frames):
-        if frame.hasImage:
-            frame.saveImageWithMetaData()
+    LOG.parseBytes()
+    # for frame in tqdm.tqdm(LOG.frames):
+    for frame in LOG.frames:
+        # if "Stopwatch" not in frame:
+        #     continue
+        # timeCost = frame["Stopwatch"]["AllModules"]
+        # if timeCost>1000:
+        #     print(timeCost, frame.timestamp)
+        # if frame.hasImage:
+        #     frame.saveImageWithMetaData()
         frame.saveFrameDict()
         frame.saveImageWithMetaData(slientFail=True)
     return
@@ -82,7 +88,7 @@ def main():
     print(f"Continue from {ContinuePos}")
 
     if not (LOG.outputDir / "data.csv").exists():
-        os.makedirs(LOG.outputDir)
+        os.makedirs(LOG.outputDir, exist_ok=True)
         with open(LOG.outputDir / "data.csv", "w") as f:
             print("Create csv")
             pass
@@ -93,6 +99,7 @@ def main():
             writer.writerow(
                 [
                     "frameIndex",
+                    "timestamp",
                     "agentLoc",
                     "ballLoc",
                     *[
@@ -147,7 +154,7 @@ def main():
                         OBS.ballInGoal(ballLoc),
                         OBS.ballOutOfFieldBounds(ballLoc),
                         OBS.ballInGoalArea(ballLoc),
-                        0,
+                        4,
                     )
                     act = None
 
@@ -165,24 +172,32 @@ def main():
 
                     info = {
                         "frameIndex": frame.absIndex,
+                        "timestamp": frame.timestamp,
                         "agentLoc": agentLoc,
                         "ballLoc": ballLoc,
                         "robotSpeedX": act[0],
                         "robotSpeedY": act[1],
                         "robotSpeedRot": act[2],
-                        "kickType": act[3],
-                        "kickLength": act[4],
-                        "alignPreciselyModified": act[5],
+                        "kickType": frame["MotionRequest"]["kickType"],
+                        "kickLength": (
+                            frame["MotionRequest"]["kickLength"]
+                            if frame["MotionRequest"]["kickLength"] < 10e7
+                            else -1
+                        ),
+                        "alignPreciselyModified": frame["MotionRequest"][
+                            "alignPrecisely"
+                        ],
                         "rollOutResult": frame.rollOutResult,
                         "jsonFile": frame.jsonName,
                     }
                     line = list(info.values())
+
                     if frame.absIndex > lastCsvFrame:
                         writer.writerow(line)
                     print(line)
                     # if prev_obs is not None:
                     #     transitions.append([prev_obs, acts, None, obs, False])
-                    transitions.append([obs, act, info, reward, False])
+                    transitions.append([obs, act, None, reward, False])
                     prevObs = obs
                     OBS.stepObservationHistory(obs)
 
@@ -196,7 +211,7 @@ def main():
                             writer.writerow(
                                 [
                                     frame.index,
-                                    *(["-"] * 8),
+                                    *(["-"] * 9),
                                     frame.rollOutResult,
                                     frame.jsonName,
                                 ]
@@ -225,12 +240,15 @@ def main():
                 print(f"KeyError: {e} at frame {frame.absIndex}")
             except AssertionError as e:
                 print(f"AssertionError: {e} at frame {frame.absIndex}")
-                print(str(frame))
-                exit(1)
             except Exception as e:  # Just to add some robusty
                 print(f"Exception: {e} at frame {frame.absIndex}")
                 raise
 
 
-main()
+profileFunction(main)
+# main()
+# with open("profile_result.prof", "w") as f:
+#     stats = pstats.Stats(cProfile.Profile(), stream=f)
+#     stats.sort_stats(pstats.SortKey.TIME)
+#     stats.print_stats()
 print("Done")

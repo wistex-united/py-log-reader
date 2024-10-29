@@ -25,13 +25,14 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
     accessor would delay the resolve of log class
     """
 
-    def __init__(self, log: Any, indexMap: Optional[IndexMap]):
+    def __init__(self, log: Any, indexMap: Optional[IndexMap], copyIndexMap=True):
         """Core invariants: log; idxFileName; indexMap (valid range of the accessor)"""
         """Core variables: indexCursor"""
         super().__init__()
         self._log = log
 
         self._frozen = False
+        self._ownIndexMap = copyIndexMap
 
         self.indexMap = indexMap
 
@@ -144,17 +145,23 @@ class LogInterfaceAccessorClass(LogInterfaceBaseClass):
 
         if value is None:
             self._indexMap = range(self.idxFile.getSize() // self.messageIdxByteLength)
+            self._ownIndexMap = True
+            return
         elif len(value) == 0:
             raise ValueError("Empty index map")
-        elif isinstance(value, list):
-            self._indexMap = sorted(value)
-        elif isinstance(value, np.ndarray):
-            self._indexMap = value.copy()
-            np.sort(self._indexMap)
-        elif isinstance(value, range):
-            self._indexMap = value
+        if self._ownIndexMap:
+            if isinstance(value, list):
+                self._indexMap = sorted(value)
+            elif isinstance(value, np.ndarray):
+                self._indexMap = value.copy()
+                np.sort(self._indexMap)
+            elif isinstance(value, range):
+                self._indexMap = range(value.start, value.stop, value.step)
+            else:
+                raise ValueError(f"Invalid index type {value.__class__.__name__}")
         else:
-            raise ValueError("Invalid index range")
+            if isinstance(value, (list, np.ndarray, range)):
+                self._indexMap = value
 
         # New indexMap might not contain the old abs index position
         # in that case, reset to the first element in new indexMap

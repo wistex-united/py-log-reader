@@ -14,6 +14,7 @@ from .DataClass import DataClass
 
 EMPTY_INDICATOR = np.iinfo(UInt).max
 
+
 class Stopwatch(DataClass):
     """
     Stopwatch message, which would appear when 'dr timing' is set
@@ -34,6 +35,18 @@ class Stopwatch(DataClass):
         self.infos: Dict[int, UInt]
         self.threadStartTime: UInt
         self.frameNo: UInt
+
+    def __contains__(self, key):
+        return super().__contains__(key) or key in self.names.values()
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return super().__getitem__(key)
+        for watchId, watchName in self.names.items():
+            if watchName == key:
+                return self.infos[watchId]
+        else:
+            raise KeyError("Invalid key")
 
     @classmethod
     def read(

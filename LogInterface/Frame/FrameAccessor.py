@@ -7,9 +7,12 @@ import numpy as np
 from StreamUtils import StreamUtil
 from Utils import MemoryMappedFile
 
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBaseClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from ..Message import MessageAccessor, MessageBase, Messages
 from .FrameBase import FrameBase
 from .FrameInstance import FrameInstance
@@ -39,8 +42,10 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
             + np.uint64(frameMessageIndexEnd).tobytes()
         )
 
-    def __init__(self, log: Any, indexMap: Optional[IndexMap] = None):
-        LogInterfaceAccessorClass.__init__(self, log, indexMap)
+    def __init__(
+        self, log: Any, indexMap: Optional[IndexMap] = None, copyIndexMap=True
+    ):
+        LogInterfaceAccessorClass.__init__(self, log, indexMap, copyIndexMap)
 
     def __getitem__(
         self, key: Union[int, str, Enum]

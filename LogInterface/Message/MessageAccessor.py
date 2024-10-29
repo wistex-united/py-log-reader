@@ -8,9 +8,12 @@ from Utils import MemoryMappedFile
 from Utils.GeneralUtils import canBeRange
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
-from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                                LogInterfaceBaseClass,
-                                LogInterfaceInstanceClass)
+from ..LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from .MessageBase import MessageBase
 from .MessageInstance import MessageInstance
 
@@ -44,8 +47,10 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
             dtype=np.uint64,
         ).tobytes()
 
-    def __init__(self, log: Any, indexMap: Optional[IndexMap] = None):
-        LogInterfaceAccessorClass.__init__(self, log, indexMap)
+    def __init__(
+        self, log: Any, indexMap: Optional[IndexMap] = None, copyIndexMap=True
+    ):
+        LogInterfaceAccessorClass.__init__(self, log, indexMap, copyIndexMap)
 
     def __getitem__(
         self, indexOrKey: Union[int, str]

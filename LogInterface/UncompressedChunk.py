@@ -13,6 +13,7 @@ from threading import Lock, Thread
 from typing import Dict, List, Optional
 
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 from Primitive.PrimitiveDefinitions import UChar
@@ -39,7 +40,7 @@ class UncompressedChunk(Chunk):
 
         # cached index of messages and data objects
         self._messages_cached: Messages
-
+        self._threadIndexMaps_cahced: Dict[str:NDArray]
         self._executor: ThreadPoolExecutor
         self._lock: Lock
         self._postProcessorThread: Thread
@@ -158,18 +159,8 @@ class UncompressedChunk(Chunk):
             byteIndex += frame.size
             frameCnt += 1
         self.frames = self.log.getFrameAccessor()
-        threadIndexMaps = {}
 
-        for index, frame in enumerate(self.frames):
-            if frame.threadName not in threadIndexMaps:
-                threadIndexMaps[frame.threadName] = [index]
-            else:
-                threadIndexMaps[frame.threadName].append(index)
-        for threadName, indexes in threadIndexMaps.items():
-            threadIndexMaps[frame.threadName] = np.array(
-                threadIndexMaps[frame.threadName]
-            )
-        for threadName, indexes in threadIndexMaps.items():
+        for threadName, indexes in self.threadIndexMaps.items():
             self._threads[threadName] = FrameAccessor(self.log, indexes)
         self._startByte = offset
         self._endByte = sutil.tell() - startPos + offset
@@ -337,6 +328,26 @@ class UncompressedChunk(Chunk):
                 for messageAbsIdx in finishedFutures:
                     del self._futures[messageAbsIdx]
             # time.sleep(1)  # Adding a small delay to prevent high CPU usage
+
+    @property
+    def threadIndexMaps(self):
+        if (
+            hasattr(self, "_threadIndexMaps_cahced")
+            and len(self._threadIndexMaps_cahced) > 0
+        ):
+            pass
+        else:
+            threadIndexMaps = {}
+            for index in range(len(self.frames)):
+                frame = self.frames[index]
+                if frame.threadName not in threadIndexMaps:
+                    threadIndexMaps[frame.threadName] = [index]
+                else:
+                    threadIndexMaps[frame.threadName].append(index)
+            for threadName, indexes in threadIndexMaps.items():
+                threadIndexMaps[threadName] = np.array(indexes)
+            self._threadIndexMaps_cahced = threadIndexMaps
+        return self._threadIndexMaps_cahced
 
     # Index file Validation
     @classmethod
