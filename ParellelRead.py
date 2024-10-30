@@ -14,6 +14,7 @@ from Utils import (
     extractTrajNumbers,
     readLastLine,
     startMemoryTracing,
+    WindowedProfiler,
 )
 
 def chunkList(lst, n):
@@ -65,6 +66,7 @@ def run_parallel_processing(log_file: str, num_workers: int = 8):
     
     # Get all cognition indices
     cogIndexMap = temp_log.UncompressedChunk.thread("Cognition")._indexMap
+
     chunks = chunkList(list(cogIndexMap), num_workers)
     del temp_log
     
@@ -87,19 +89,25 @@ def run_parallel_processing(log_file: str, num_workers: int = 8):
     
     print('\n')
 
+profiler = WindowedProfiler(window_size=60) 
+
+@profiler.profile_with_windows
 def main():
-    monitor = ResourceMonitor(interval=1.0)
-    startMemoryTracing()
-    try:
-        # Start monitoring
-        monitor.start()
+    # monitor = ResourceMonitor(interval=1.0)
+    # startMemoryTracing()
+    # try:
+    #     # Start monitoring
+    #     monitor.start()
         
-        run_parallel_processing("neargoal.log", num_workers=8)
+    #     run_parallel_processing("neargoal.log", num_workers=8)
         
-    finally:
-        # Stop monitoring and generate report
-        monitor.stop()
-        displayTopMemoryConsumers( tracemalloc.take_snapshot() )
+    # finally:
+    #     # Stop monitoring and generate report
+    #     monitor.stop()
+    #     displayTopMemoryConsumers( tracemalloc.take_snapshot() )
+
+    run_parallel_processing("neargoal.log", num_workers=8)
+    
 if __name__ == '__main__':
     # Set multiprocessing start method
     multiprocessing.set_start_method('fork')
