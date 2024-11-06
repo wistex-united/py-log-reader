@@ -3,6 +3,7 @@ import csv
 import functools
 import os
 import threading
+import queue
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -10,7 +11,7 @@ from functools import partial
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import numpy as np
 from tqdm import tqdm
@@ -40,19 +41,17 @@ class UncompressedChunk(Chunk):
         # cached index of messages and data objects
         self._messages_cached: Messages
 
+        self._result_queue = queue.Queue(maxsize=1000)  # Add bounded queue
         self._executor: ThreadPoolExecutor
-        self._lock: Lock
-        self._postProcessorThread: Thread
-
-        # self._initExecutor()
+        self._lock: Lock = Lock()
+        self._active_futures: Set = set()
+        self._shutdown: bool = False
 
     def _initExecutor(self):
         self._executor = ThreadPoolExecutor(max_workers=cpu_count())
-        self._futures = defaultdict(list)
-        self._lock = Lock()
-        self._postProcessorThread = Thread(target=self.fetchParsedMessages)
-        self._postProcessorThread.daemon = True
-        self._postProcessorThread.start()
+        self._processor_thread = Thread(target=self._process_results)
+        self._processor_thread.daemon = True
+        self._processor_thread.start()
 
     @property
     def frames(self) -> Frames:
@@ -310,33 +309,89 @@ class UncompressedChunk(Chunk):
         return partial(MessageBase.parseBytesWrapper, logFilePath=self.logFilePath)
 
     def submitJob(self, message: MessageAccessor):
+        """Submit job with bounded queue and backpressure"""
+        if self._shutdown:
+            return
+            
+        # Add queue size monitoring
+        if self._result_queue.qsize() > self._result_queue.maxsize * 0.8:
+            time.sleep(0.1)  # Brief pause if queue getting full
+            
         future = self._executor.submit(
             self.parseBytesWrapper,
-            message.startByte + 4,
-            message.endByte,
-            message.classType.read,
+            (message.startByte + 4, message.endByte, message.classType.read)
         )
-        with self.lock:
-            self._futures[message.absIndex] = future
+            
+        with self._lock:
+            self._active_futures.add(future)
+        
+        future.add_done_callback(self._future_done_callback)
 
-    def fetchParsedMessages(self):
-        while True:
+    def _future_done_callback(self, future):
+        """Callback when future completes"""
+        try:
+            result = future.result()
+            self._result_queue.put((future, result), timeout=0.1)
+        except queue.Full:
+            # If queue is full, retry with exponential backoff
+            retry_count = 0
+            while retry_count < 3:  # Maximum 3 retries
+                try:
+                    time.sleep(0.1 * (2 ** retry_count))  # Exponential backoff
+                    self._result_queue.put((future, result), timeout=0.1)
+                    return
+                except queue.Full:
+                    retry_count += 1
+            
             with self._lock:
-                finishedFutures = []
-                for messageAbsIdx, future in self._futures.items():
-                    if future.done():
-                        result = future.result()
-                        # message.reprObj = result
-                        # if isinstance(result, Stopwatch):
-                        #     frameTmp = message.frame
-                        #     frameTmp.timer.parseStopwatch(result, frameTmp.index)
-                        self.log.writeCacheInfo(
-                            "Message", "reprObj", messageAbsIdx, result
-                        )
-                        finishedFutures.append(messageAbsIdx)
-                for messageAbsIdx in finishedFutures:
-                    del self._futures[messageAbsIdx]
-            # time.sleep(1)  # Adding a small delay to prevent high CPU usage
+                self._active_futures.add(future)
+        except Exception as e:
+            print(f"Error processing future: {e}")
+        finally:
+            with self._lock:
+                self._active_futures.discard(future)
+
+    def _process_results(self):
+        """Process results from queue"""
+        batch = []
+        while not self._shutdown:
+            try:
+                # Reduce timeout from 0.1s to 0.01s
+                future, result = self._result_queue.get(timeout=0.01)
+                batch.append(result)
+                
+                # Process in batches for efficiency but with shorter polling
+                batch_start = time.time()
+                while len(batch) < 100 and (time.time() - batch_start) < 0.05:
+                    try:
+                        future, result = self._result_queue.get_nowait() 
+                        batch.append(result)
+                    except queue.Empty:
+                        break
+                        
+                if batch:
+                    # Process batch
+                    with self._lock:
+                        for result in batch:
+                            self.log.writeCacheInfo("Message", "reprObj", 
+                                result.messageId, result)
+                    batch = []
+                
+                # Small sleep to prevent tight loop
+                time.sleep(0.001)
+                    
+            except queue.Empty:
+                # Reduce sleep time on empty queue
+                time.sleep(0.01)  
+            except Exception as e:
+                print(f"Error in result processor: {e}")
+                time.sleep(0.1)  # Sleep on error but not too long
+
+    def shutdown(self):
+        """Clean shutdown"""
+        self._shutdown = True
+        if self._executor:
+            self._executor.shutdown(wait=True)
 
     # Index file Validation
     @classmethod

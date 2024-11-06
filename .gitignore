@@ -1,5 +1,7 @@
 __pycache__/
 cache/
+monitoring/
+runs/
 LogInterface/LogClasses/*
 !LogInterface/LogClasses/__init__.py
 *_frames/

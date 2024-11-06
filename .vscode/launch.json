@@ -12,6 +12,15 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "subProcess": true,
+        },
+        {
+            "name": "Parellel",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/ParellelRead.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "subProcess": true,
         }
     ]
 }

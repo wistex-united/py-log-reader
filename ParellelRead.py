@@ -5,7 +5,6 @@ import tqdm
 from LogInterface import Log
 from Primitive import *
 from StreamUtils import *
-from Utils import ResourceMonitor
 
 from Utils import (
     ObservationJosh,
@@ -89,25 +88,12 @@ def run_parallel_processing(log_file: str, num_workers: int = 8):
     
     print('\n')
 
-profiler = WindowedProfiler(window_size=60) 
+profiler = WindowedProfiler(window_size=60)
 
 @profiler.profile_with_windows
 def main():
-    # monitor = ResourceMonitor(interval=1.0)
-    # startMemoryTracing()
-    # try:
-    #     # Start monitoring
-    #     monitor.start()
-        
-    #     run_parallel_processing("neargoal.log", num_workers=8)
-        
-    # finally:
-    #     # Stop monitoring and generate report
-    #     monitor.stop()
-    #     displayTopMemoryConsumers( tracemalloc.take_snapshot() )
-
     run_parallel_processing("neargoal.log", num_workers=8)
-    
+
 if __name__ == '__main__':
     # Set multiprocessing start method
     multiprocessing.set_start_method('fork')

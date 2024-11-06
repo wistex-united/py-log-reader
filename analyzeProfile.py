@@ -51,6 +51,8 @@ class ProfileAnalyzer:
                     # ct: cumulative time
                     
                     func_name = f"{func[0]}:{func[1]}:{func[2]}"
+                    if tt > 1e-5:
+                        print(f"{func_name}: {cc} calls, {nc} native calls, {tt} total time, {ct} cumulative time")
                     self.window_data[func_name].append((window_num, ct))  # Use cumulative time
                     
             except Exception as e:

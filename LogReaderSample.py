@@ -15,8 +15,10 @@ from Utils import (
     extractTrajNumbers,
     readLastLine,
     startMemoryTracing,
+    WindowedProfiler,
 )
 
+profiler = WindowedProfiler(window_size=60)
 
 def checkPointCallback(cnt):
     if cnt % 1000 == 0:
@@ -24,9 +26,8 @@ def checkPointCallback(cnt):
         snapshot = tracemalloc.take_snapshot()
         displayTopMemoryConsumers(snapshot)
 
-
+@profiler.profile_with_windows
 def main():
-    startMemoryTracing()
     LOG = Log()
     # LOG.readLogFile("bc18_adam.log")
     # LOG.readLogFile("Reference.log")
