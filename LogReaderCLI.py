@@ -152,26 +152,26 @@ class LogReaderCLI:
         LOG.readLogFile(logFile)
         LOG.eval(isLogFileLarge=True)
 
+        frameIdxes=[]
         # Get initial frame set based on threads
         if threads:
-            frameidxes = []
             for thread in threads:
                 threadFrameIdxes = LOG.UncompressedChunk.thread(thread)._indexMap
-                frameidxes.extend(threadFrameIdxes)
-            frameidxes.sort()
+                frameIdxes.extend(threadFrameIdxes)
+            frameIdxes.sort()
         else:
-            frameidxes = LOG.UncompressedChunk.frames._indexMap
+            frameIdxes = list(LOG.UncompressedChunk.frames._indexMap)
 
         if frameFilter.startFrame is not None or frameFilter.endFrame is not None:
             startIdx = 0 if frameFilter.startFrame is None else frameFilter.startFrame
             endIdx = (
-                frameidxes[-1] if frameFilter.endFrame is None else frameFilter.endFrame
+                frameIdxes[-1] if frameFilter.endFrame is None else frameFilter.endFrame
             )
-            frameidxes = [f for f in frameidxes if startIdx <= f <= endIdx]
+            frameIdxes = [f for f in frameIdxes if startIdx <= f <= endIdx]
 
         # Apply time range filter if specified
-        frameAcc = LOG.getFrameAccessor(indexMap=frameidxes)
-
+        frameAcc = LOG.getFrameAccessor(indexMap=frameIdxes)
+        
         if frameFilter.startTime is not None or frameFilter.endTime is not None:
             startTimestamp = (
                 frameAcc[0].timestamp
