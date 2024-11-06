@@ -101,6 +101,15 @@ class WindowedProfiler:
             
         return wrapper
 
+    def __getstate__(self) -> object:
+        state = self.__dict__.copy()
+        del state['profile_lock']
+        return state
+
+    def __setstate__(self, state: object) -> None:
+        self.__dict__.update(state)
+        self.profile_lock = threading.Lock()
+
 def process_chunk(chunk_indices: List[int], worker_id: int):
     """Process a chunk of data"""
     pbar = tqdm.tqdm(
