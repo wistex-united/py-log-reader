@@ -39,19 +39,19 @@ class UncompressedChunk(Chunk):
         self._timers: Dict[str, Timer] = {}
 
         # cached index of messages and data objects
-        self._messages_cached: Messages
+        self._messagesCached: Messages
 
-        self._result_queue = queue.Queue(maxsize=1000)  # Add bounded queue
+        self._resultQueue_cached = queue.Queue(maxsize=1000)  # Add bounded queue
         self._executor: ThreadPoolExecutor
         self._lock: Lock = Lock()
-        self._active_futures: Set = set()
+        self._activeFutures: Set = set()
         self._shutdown: bool = False
 
     def _initExecutor(self):
         self._executor = ThreadPoolExecutor(max_workers=cpu_count())
-        self._processor_thread = Thread(target=self._process_results)
-        self._processor_thread.daemon = True
-        self._processor_thread.start()
+        self._processorThread = Thread(target=self._processResults)
+        self._processorThread.daemon = True
+        self._processorThread.start()
 
     @property
     def frames(self) -> Frames:
@@ -312,77 +312,78 @@ class UncompressedChunk(Chunk):
         """Submit job with bounded queue and backpressure"""
         if self._shutdown:
             return
-            
+
         # Add queue size monitoring
-        if self._result_queue.qsize() > self._result_queue.maxsize * 0.8:
+        if self._resultQueue.qsize() > self._resultQueue.maxsize * 0.8:
             time.sleep(0.1)  # Brief pause if queue getting full
-            
+
         future = self._executor.submit(
             self.parseBytesWrapper,
-            (message.startByte + 4, message.endByte, message.classType.read)
+            (message.startByte + 4, message.endByte, message.classType.read),
         )
-            
-        with self._lock:
-            self._active_futures.add(future)
-        
-        future.add_done_callback(self._future_done_callback)
 
-    def _future_done_callback(self, future):
+        with self._lock:
+            self._activeFutures.add(future)
+
+        future.add_done_callback(self._futureDoneCallback)
+
+    def _futureDoneCallback(self, future):
         """Callback when future completes"""
         try:
             result = future.result()
-            self._result_queue.put((future, result), timeout=0.1)
+            self._resultQueue.put((future, result), timeout=0.1)
         except queue.Full:
             # If queue is full, retry with exponential backoff
-            retry_count = 0
-            while retry_count < 3:  # Maximum 3 retries
+            retryCount = 0
+            while retryCount < 3:  # Maximum 3 retries
                 try:
-                    time.sleep(0.1 * (2 ** retry_count))  # Exponential backoff
-                    self._result_queue.put((future, result), timeout=0.1)
+                    time.sleep(0.1 * (2**retryCount))  # Exponential backoff
+                    self._resultQueue.put((future, result), timeout=0.1)
                     return
                 except queue.Full:
-                    retry_count += 1
-            
+                    retryCount += 1
+
             with self._lock:
-                self._active_futures.add(future)
+                self._activeFutures.add(future)
         except Exception as e:
             print(f"Error processing future: {e}")
         finally:
             with self._lock:
-                self._active_futures.discard(future)
+                self._activeFutures.discard(future)
 
-    def _process_results(self):
+    def _processResults(self):
         """Process results from queue"""
         batch = []
         while not self._shutdown:
             try:
                 # Reduce timeout from 0.1s to 0.01s
-                future, result = self._result_queue.get(timeout=0.01)
+                future, result = self._resultQueue.get(timeout=0.01)
                 batch.append(result)
-                
+
                 # Process in batches for efficiency but with shorter polling
-                batch_start = time.time()
-                while len(batch) < 100 and (time.time() - batch_start) < 0.05:
+                batchStart = time.time()
+                while len(batch) < 100 and (time.time() - batchStart) < 0.05:
                     try:
-                        future, result = self._result_queue.get_nowait() 
+                        future, result = self._resultQueue.get_nowait()
                         batch.append(result)
                     except queue.Empty:
                         break
-                        
+
                 if batch:
                     # Process batch
                     with self._lock:
                         for result in batch:
-                            self.log.writeCacheInfo("Message", "reprObj", 
-                                result.messageId, result)
+                            self.log.writeCacheInfo(
+                                "Message", "reprObj", result.messageId, result
+                            )
                     batch = []
-                
+
                 # Small sleep to prevent tight loop
                 time.sleep(0.001)
-                    
+
             except queue.Empty:
                 # Reduce sleep time on empty queue
-                time.sleep(0.01)  
+                time.sleep(0.01)
             except Exception as e:
                 print(f"Error in result processor: {e}")
                 time.sleep(0.1)  # Sleep on error but not too long
@@ -701,16 +702,16 @@ class UncompressedChunk(Chunk):
     @property
     def messages(self) -> Messages:
         if hasattr(self, "_messages_cached"):
-            return self._messages_cached
-        self._messages_cached = []
+            return self._messagesCached
+        self._messagesCached = []
 
         for frame in self.frames:
             if isinstance(frame.children, LogInterfaceAccessorClass):
                 for message in frame.children:
-                    self._messages_cached.append(message.copy().freeze())
+                    self._messagesCached.append(message.copy().freeze())
             else:  # Instance class
-                self._messages_cached.extend(frame.messages)
-        return self._messages_cached
+                self._messagesCached.extend(frame.messages)
+        return self._messagesCached
 
     def thread(self, name: str) -> Frames:
         return self._threads[name]
