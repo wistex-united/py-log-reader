@@ -74,7 +74,7 @@ class LogInterfaceInstanceClass(LogInterfaceBaseClass):
     def __getstate__(self):
         state = {}
         for key, value in self.__dict__.items():
-            if key.endswith("_cached"):
+            if key.endswith("_cached") or key.endswith("_lock"):
                 continue
             state[key] = value
         return state
