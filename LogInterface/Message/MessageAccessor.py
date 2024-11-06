@@ -4,8 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from Primitive import *
 from StreamUtils import StreamUtil
-from Utils import MemoryMappedFile
-from Utils.GeneralUtils import canBeRange
+from Utils import MemoryMappedFile, isIntAlike
 
 from ..DataClasses import Annotation, DataClass, Stopwatch
 from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
@@ -54,7 +53,7 @@ class MessageAccessor(MessageBase, LogInterfaceAccessorClass):
 
         if isinstance(indexOrKey, str):
             result = MessageBase.__getitem__(self, indexOrKey)
-        elif isinstance(indexOrKey, int):
+        elif isIntAlike(indexOrKey):
             result = LogInterfaceAccessorClass.__getitem__(self, indexOrKey)
         else:
             raise KeyError("Invalid key type")

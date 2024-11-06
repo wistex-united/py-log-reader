@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Any, List, Union
 
 from StreamUtils import StreamUtil
+from Utils import isIntAlike
 
 from ..LogInterfaceBase import LogInterfaceInstanceClass
 from ..Message import MessageInstance, Messages
@@ -18,7 +19,7 @@ class FrameInstance(FrameBase, LogInterfaceInstanceClass):
         self._absMessageIndexStart_cached: int
 
     def __getitem__(self, key: Union[int, str, Enum]) -> FrameBase:
-        if isinstance(key, int):
+        if isIntAlike(key):
             return self.messages[key]
         else:
             return super().__getitem__(key)

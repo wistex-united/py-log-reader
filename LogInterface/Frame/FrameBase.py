@@ -79,7 +79,7 @@ class FrameBase(LogInterfaceBaseClass):
             else:
                 return result
         else:
-            raise KeyError("Invalid key type")
+            raise KeyError(f"Invalid key type: {key}")
 
     # def __getattribute__(self, name: str) -> MessageBase:
     #     try:

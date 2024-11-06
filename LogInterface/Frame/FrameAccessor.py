@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Tuple, Type, Union
 import numpy as np
 
 from StreamUtils import StreamUtil
-from Utils import MemoryMappedFile
+from Utils import MemoryMappedFile, isIntAlike
 
 from ..LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
                                 LogInterfaceBaseClass,
@@ -45,8 +45,8 @@ class FrameAccessor(FrameBase, LogInterfaceAccessorClass):
     def __getitem__(
         self, key: Union[int, str, Enum]
     ) -> Union["FrameAccessor", MessageBase]:
-        if isinstance(key, int):
-            self.indexCursor = key
+        if isIntAlike(key):
+            self.indexCursor = int(key)
             return self
         else:
             result = self.log.getCachedInfo(self, key)

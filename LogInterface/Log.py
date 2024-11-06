@@ -11,14 +11,17 @@ from numpy.typing import NDArray
 
 from Primitive.PrimitiveDefinitions import Bool
 from StreamUtils import StreamUtil
-from Utils import MemoryMappedFile
+from Utils import MemoryMappedFile, isIntAlike
 
 from .Chunk import Chunk, ChunkEnum
 from .DataClasses import DataClass
 from .Frame import FrameAccessor, FrameBase, FrameInstance, Frames
-from .LogInterfaceBase import (IndexMap, LogInterfaceAccessorClass,
-                               LogInterfaceBaseClass,
-                               LogInterfaceInstanceClass)
+from .LogInterfaceBase import (
+    IndexMap,
+    LogInterfaceAccessorClass,
+    LogInterfaceBaseClass,
+    LogInterfaceInstanceClass,
+)
 from .Message import MessageAccessor, MessageBase, MessageInstance, Messages
 from .MessageIDChunk import MessageIDChunk as MChunk
 from .SettingsChunk import SettingsChunk as SChunk
@@ -81,7 +84,7 @@ class Log(LogInterfaceInstanceClass):
 
     def __getitem__(self, key: Union[int, str, ChunkEnum]) -> Chunk:
         """Allow to use [<chunk idx>/<chunk name>/<chunk enum>] to access a chunk"""
-        if isinstance(key, int) and key < len(self._children):
+        if isIntAlike(key) and key < len(self._children):
             return self._children[key]
         elif isinstance(key, str) or isinstance(key, ChunkEnum):
             result = None

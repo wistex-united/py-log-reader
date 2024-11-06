@@ -49,6 +49,16 @@ def dumpJson(obj, indent=2) -> str:
 def bytes2ShortStr(b: bytes):
     return f"Bytes[{len(b)}]: {b[:4] if len(b) >= 4 else b''} ..."
 
+def isIntAlike(value):
+    # Check if it's a regular integer
+    if isinstance(value, int):
+        return True
+    
+    # Check if it's a numpy integer
+    if np.issubdtype(type(value), np.integer):
+        return True
+    
+    return False
 
 class _NestedClassGetter(object):
     """
