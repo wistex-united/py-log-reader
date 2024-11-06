@@ -1,0 +1,10 @@
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - tqdm
+  - numpy
+  - pillow
+  - opencv
+  - pip:
+    - opencv-python
