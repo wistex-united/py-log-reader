@@ -313,10 +313,8 @@ class FrameBase(LogInterfaceBaseClass):
         thread = self.log.getContentChunk().thread(self.threadName)
         if isinstance(thread, LogInterfaceAccessorClass):
             if thread is self:
-                return self.indexCursor
-            for frame in thread:
-                if frame.absIndex == self.absIndex:
-                    return frame.indexCursor
+                return thread.indexCursor
+            return thread.clacRelativeIndex(self.absIndex)
         elif isinstance(thread, list):
             for i, c in enumerate(thread):
                 c._threadIndex_cached = i
@@ -327,7 +325,15 @@ class FrameBase(LogInterfaceBaseClass):
         """The time elapse between this log frame and the last log frame of the thread"""
         if self.threadIndex == 0:
             return 0
-        return self.timestamp - self.thread[self.threadIndex - 1].timestamp
+
+        cur_timestamp = self.timestamp
+        prev_timestamp = self.thread[self.threadIndex - 1].timestamp
+
+        # Check for overflow
+        if cur_timestamp >= prev_timestamp:
+            return cur_timestamp - prev_timestamp
+        else:
+            return (0xFFFFFFFF - prev_timestamp) + cur_timestamp + 1
 
     # Dict Representation of the object
     @property
