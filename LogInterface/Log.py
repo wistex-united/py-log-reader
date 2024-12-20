@@ -81,6 +81,7 @@ class Log(LogInterfaceInstanceClass):
 
         # cache
         self._messageCachedReprList_cached: NDArray[Bool]
+        self._outputDir_cached: Path
 
     def __getitem__(self, key: Union[int, str, ChunkEnum]) -> Chunk:
         """Allow to use [<chunk idx>/<chunk name>/<chunk enum>] to access a chunk"""
@@ -237,12 +238,20 @@ class Log(LogInterfaceInstanceClass):
         return self._children
 
     @property
-    def outputDir(self):
-        return (
+    def outputDir(self) -> Path:
+        if hasattr(self, "_outputDir_cached"):
+            return self._outputDir_cached
+
+        self._outputDir_cached = (
             Path(self.logFilePath).parent
             / "LogReaderOutputs"
             / Path(self.logFilePath).stem
         )
+        return self._outputDir_cached
+    
+    @outputDir.setter
+    def outputDir(self, value: Path):
+        self._outputDir_cached = value
 
     @property
     def imageDir(self):

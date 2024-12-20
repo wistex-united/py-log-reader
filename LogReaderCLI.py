@@ -3,6 +3,7 @@ import multiprocessing
 from typing import Any, Dict, List, Optional, Tuple
 
 import tqdm
+from pathlib import Path
 
 from LogInterface import FrameAccessor, FrameBase, FrameInstance, Frames, Log
 
@@ -119,11 +120,15 @@ class LogReaderCLI:
 
         return chunks
 
-    def _processChunk(self, logFile: str, chunkIndices: list, workerId: int):
+    def _processChunk(self, logFile: str, chunkIndices: list, workerId: int, outputDir: Optional[Path] = None):
+
         # Initialize Log for this worker
         LOG = Log()
         LOG.readLogFile(logFile)
         LOG.eval(isLogFileLarge=True)
+
+        if outputDir:
+            LOG.outputDir = outputDir
 
         # Get the frame accessor for this chunk
         accessor = LOG.getFrameAccessor(chunkIndices)
@@ -234,6 +239,9 @@ Examples:
   
   # Enable profiling
   %(prog)s input.log --profile
+
+  # Specify custom output directory
+  %(prog)s input.log --outdir /path/to/output
             """,
         )
 
@@ -268,6 +276,12 @@ Examples:
         parser.add_argument("--end-frame", type=int, help="End frame number")
 
         parser.add_argument(
+            "--outdir",
+            type=Path,
+            help="Custom output directory for processed frames and images",
+        )
+
+        parser.add_argument(
             "--profile", action="store_true", help="Enable performance profiling"
         )
 
@@ -289,6 +303,9 @@ Examples:
         except ValueError as e:
             parser.error(str(e))
 
+        if args.outdir:
+            args.outdir.mkdir(parents=True, exist_ok=True)
+
         # Get filtered index map once
         filteredIndices = self._getFilteredIndexMap(
             args.inputFile, args.threads, frameFilter
@@ -308,7 +325,7 @@ Examples:
         for workerId, chunkIndices in enumerate(chunks):
             p = multiprocessing.Process(
                 target=self._processChunk,
-                args=(args.inputFile, chunkIndices, workerId),
+                args=(args.inputFile, chunkIndices, workerId, args.outdir),
             )
             processes.append(p)
             p.start()
