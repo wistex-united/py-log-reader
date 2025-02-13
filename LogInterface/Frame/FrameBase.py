@@ -408,11 +408,12 @@ class FrameBase(LogInterfaceBaseClass):
                         break
                 if sign == 1:
                     distance += 1
+                    if self.absIndex - sign * distance in rangeOfIndex:
+                        sign = -sign
                 else:
                     sign = -sign
             if not found:
-                for i in rangeOfIndex:
-                    self._timestamps_cache = range(len(self.parent.children))
+                self._timestamps_cache = range(len(self.parent.children))
         return self._timestamps_cache[self.absIndex]
 
     def interpolateAllTimestamps(self):
